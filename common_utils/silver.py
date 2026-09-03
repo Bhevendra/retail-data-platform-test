@@ -93,7 +93,7 @@ def load_entity(spark, ctx: RunContext, config: SilverConfig, entity: SilverEnti
     bronze = spark.table(qualified(catalog, config.bronze_schema, entity.source_table))
     # Only the rows of this load date are processed: Bronze is idempotent per date, so is Silver.
     batch = bronze.filter(F.col("_load_date") == F.lit(ctx.run_date_iso).cast("date"))
-    prepared = prepare(batch, entity, ctx).cache()
+    prepared = prepare(batch, entity, ctx)  # no .cache(): PERSIST is not supported on Serverless
     rows_read = prepared.count()
     if rows_read == 0:
         log(logger, "no rows for run_date; silver entity skipped", level=30, entity=entity.target_table, run_date=ctx.run_date_iso)
@@ -108,7 +108,6 @@ def load_entity(spark, ctx: RunContext, config: SilverConfig, entity: SilverEnti
         merge_type_1(spark, prepared, target, entity.primary_keys)
     else:
         merge_type_2(spark, prepared, target, entity.primary_keys, detect_deletes=detect_deletes)
-    prepared.unpersist()
 
     comments = {**entity.column_comments, **_lineage_comments(entity.scd_type)}
     govern_table(

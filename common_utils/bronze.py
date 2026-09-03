@@ -68,7 +68,7 @@ def load_source_to_bronze(spark, dbutils, ctx: RunContext, config: BronzeConfig,
     logger = get_logger()
     catalog, schema = ctx.catalog, config.schema
     raw_df, raw_path = read_landed_raw(spark, dbutils, source, volume_path, ctx.run_date_iso)
-    bronze_df = with_audit_columns(raw_df, ctx, source, raw_path).cache()
+    bronze_df = with_audit_columns(raw_df, ctx, source, raw_path)  # no .cache(): PERSIST is not supported on Serverless
     rows_read = bronze_df.count()
 
     results = evaluate_rules(bronze_df, source.quality_rules)
@@ -108,7 +108,6 @@ def load_source_to_bronze(spark, dbutils, ctx: RunContext, config: BronzeConfig,
         cluster_by=["_load_date", *source.primary_keys],
     )
     rows_written = rows_read - rows_quarantined
-    bronze_df.unpersist()
     return BronzeLoadResult(source.target_table, rows_read, rows_written, rows_quarantined)
 
 
