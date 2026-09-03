@@ -1,3 +1,6 @@
+import json
+
+
 def _secret(dbutils, scope: str, key: str) -> str:
     return dbutils.secrets.get(scope=scope, key=key)
 
@@ -24,8 +27,10 @@ def read_source(spark, dbutils, source: dict, secret_scope: str):
         documents = list(client[source["database"]][source["collection"]].find({}))
         if not documents:
             raise ValueError(f"Cosmos collection is empty: {source['database']}.{source['collection']}")
-        json_rows = [json_util.dumps(document) for document in documents]
-        return spark.read.json(spark.sparkContext.parallelize(json_rows))
+        # SparkContext is unavailable on Serverless compute. Extended JSON makes
+        # ObjectId and other BSON-only values safe for Spark DataFrame inference.
+        json_rows = [json.loads(json_util.dumps(document)) for document in documents]
+        return spark.createDataFrame(json_rows)
     raise ValueError(f"Unsupported source type: {source_type}")
 
 
