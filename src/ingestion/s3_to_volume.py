@@ -5,6 +5,10 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install boto3==1.35.98
+
+# COMMAND ----------
+
 import sys
 from datetime import date
 from pathlib import Path
@@ -16,7 +20,7 @@ for candidate in [Path.cwd(), *Path.cwd().parents]:
 
 from common_utils.config import load_config
 from common_utils.governance import bootstrap_namespace
-from common_utils.sources import land_raw, read_source
+from common_utils.sources import land_s3_object
 
 dbutils.widgets.text("config_path", "src/bronze/config/bronze.json")
 dbutils.widgets.text("catalog", "retaildataplatform")
@@ -28,6 +32,11 @@ catalog = dbutils.widgets.get("catalog") or config["platform"]["catalog"]
 platform = config["platform"]
 source = next(item for item in config["sources"] if item["type"] == "s3")
 bootstrap_namespace(spark, catalog, platform["schema"], platform["raw_volume"])
-df = read_source(spark, dbutils, source, dbutils.widgets.get("secret_scope"))
-path = land_raw(spark, dbutils, df, source, f"/Volumes/{catalog}/{platform['schema']}/{platform['raw_volume']}", dbutils.widgets.get("run_date"))
+path = land_s3_object(
+    dbutils,
+    source,
+    dbutils.widgets.get("secret_scope"),
+    f"/Volumes/{catalog}/{platform['schema']}/{platform['raw_volume']}",
+    dbutils.widgets.get("run_date"),
+)
 print(f"S3 data landed to {path}")

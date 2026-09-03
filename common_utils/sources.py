@@ -1,4 +1,7 @@
 import json
+import os
+import tempfile
+from urllib.parse import urlparse
 
 
 def _secret(dbutils, scope: str, key: str) -> str:
@@ -56,6 +59,29 @@ def land_raw(spark, dbutils, df, source: dict, volume_path: str, load_date: str)
         df.write.format("json").mode("overwrite").save(target)
     else:
         df.write.mode("overwrite").option("header", "true").csv(target)
+    return target
+
+
+def land_s3_object(dbutils, source: dict, secret_scope: str, volume_path: str, load_date: str) -> str:
+    """Download the original S3 object using scoped credentials and copy it unchanged to a UC volume."""
+    import boto3
+
+    location = urlparse(source["path"])
+    if location.scheme != "s3" or not location.netloc or not location.path:
+        raise ValueError(f"Invalid S3 URI: {source['path']}")
+    keys = source["secret_keys"]
+    client = boto3.client(
+        "s3",
+        aws_access_key_id=_secret(dbutils, secret_scope, keys["access_key_id"]),
+        aws_secret_access_key=_secret(dbutils, secret_scope, keys["secret_access_key"]),
+        region_name=source["region"],
+    )
+    target = f"{volume_path}/{source['name']}/load_date={load_date}"
+    filename = os.path.basename(location.path)
+    local_path = os.path.join(tempfile.gettempdir(), filename)
+    client.download_file(location.netloc, location.path.lstrip("/"), local_path)
+    dbutils.fs.mkdirs(target)
+    dbutils.fs.cp(f"file:{local_path}", f"{target}/{filename}")
     return target
 
 

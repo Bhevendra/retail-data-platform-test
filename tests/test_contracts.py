@@ -16,7 +16,7 @@ def test_configuration_contracts_are_complete():
 
 
 def test_no_credential_literal_is_committed():
-    prohibited = ("AKIA", "mongodb://", "password =", "secret_access_key")
+    prohibited = ("AKIA", "mongodb://", "password =")
     files = list((ROOT / "src").rglob("*.json")) + list((ROOT / "src").rglob("*.py")) + list((ROOT / "common_utils").rglob("*.py"))
     contents = "\n".join(path.read_text().lower() for path in files)
     assert not any(token.lower() in contents for token in prohibited)

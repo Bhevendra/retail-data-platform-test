@@ -34,6 +34,9 @@ resources:
               config_path: src/bronze/config/bronze.json
               catalog: ${var.catalog}
               secret_scope: ${var.secret_scope}
+          libraries:
+            - pypi:
+                package: boto3==1.35.98
         - task_key: ingest_sqlserver
           job_cluster_key: ingestion_cluster
           notebook_task:

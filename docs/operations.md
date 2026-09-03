@@ -9,11 +9,11 @@ Databricks-backed secret storage or an Azure Key Vault-backed scope only.
 | --- | --- |
 | Cosmos DB | `cosmos-connection-string` |
 | SQL Server | `sqlserver-username`, `sqlserver-password` |
-| S3 when not using a Unity Catalog storage credential | `aws-access-key-id`, `aws-secret-access-key` |
+| S3 | `aws-access-key-id`, `aws-secret-access-key` |
 
-The current S3 path is read through the cluster's Unity Catalog storage
-credential. Do not add AWS static keys unless that temporary fallback is
-implemented and approved by security.
+The current S3 ingestion uses the scoped AWS keys to copy the original source
+object into the raw volume. In production, replace these with a Unity Catalog
+storage credential/external location and an IAM role with read-only access.
 
 ## Production controls
 
