@@ -144,3 +144,10 @@ def test_cosmos_schema_inference_handles_nulls_and_mixed_types(spark):
     data = [tuple(_coerce(r.get(n), t) for n, t in schema) for r in rows]
     df = spark.createDataFrame(data, ", ".join(f"`{n}` {t}" for n, t in schema))
     assert df.count() == 2 and df.filter("c = '3'").count() == 1
+
+
+def test_tolerant_cast_accepts_float_formatted_integers_and_nulls_bad_values(spark):
+    df = spark.createDataFrame([("1.564627663E9", "46506.0", "12", "abc", None)], "a string, b string, c string, d string, e string")
+    t = Transformations.from_dict({"cast": {"a": "bigint", "b": "int", "c": "bigint", "d": "int", "e": "bigint"}, "null_literals": []})
+    row = apply_transformations(df, t).first()
+    assert (row["a"], row["b"], row["c"], row["d"], row["e"]) == (1564627663, 46506, 12, None, None)

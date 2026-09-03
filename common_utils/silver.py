@@ -46,10 +46,10 @@ def apply_transformations(df: DataFrame, t: Transformations) -> DataFrame:
     for old, new in t.rename.items():
         if old in df.columns:
             df = df.withColumnRenamed(old, new)
-    # 4. Cast.
+    # 4. Cast (tolerant: ANSI mode on Databricks makes a plain CAST fail the whole load on one bad value).
     for column, spark_type in t.cast.items():
         if column in df.columns:
-            df = df.withColumn(column, F.col(column).cast(spark_type))
+            df = df.withColumn(column, tolerant_cast(column, spark_type))
     # 5. Parse JSON strings into typed structures.
     for column, ddl in t.parse_json.items():
         if column in df.columns:
@@ -63,6 +63,20 @@ def apply_transformations(df: DataFrame, t: Transformations) -> DataFrame:
     if t.drop:
         df = df.drop(*[c for c in t.drop if c in df.columns])
     return df
+
+
+_INTEGRAL_TYPES = {"tinyint", "smallint", "int", "integer", "bigint", "long", "short", "byte"}
+
+
+def tolerant_cast(column: str, spark_type: str):
+    """try_cast that also accepts float-formatted integers ('1.564627663E9', '46506.0') for integral targets.
+
+    Bad values become NULL instead of failing the load; the entity's quality rules decide whether that blocks.
+    """
+    target = spark_type.strip().lower()
+    if target in _INTEGRAL_TYPES:
+        return F.expr(f"try_cast(try_cast(`{column}` AS DOUBLE) AS {target})")
+    return F.expr(f"try_cast(`{column}` AS {spark_type})")
 
 
 def business_columns(df: DataFrame, entity: SilverEntity) -> list[str]:
