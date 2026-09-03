@@ -14,8 +14,8 @@ All statements are idempotent and safe to re-run on every load.
 
 from __future__ import annotations
 
-from retail_platform.config import ForeignKey, qualified
-from retail_platform.runtime import get_logger, log
+from common_utils.config import ForeignKey, qualified
+from common_utils.runtime import get_logger, log
 
 DEFAULT_TABLE_PROPERTIES = {
     "delta.enableChangeDataFeed": "true",

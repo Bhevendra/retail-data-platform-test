@@ -4,7 +4,7 @@ import re
 
 import yaml
 
-from retail_platform.config import load_bronze_config, load_gold_config, load_silver_config, repo_root
+from common_utils.config import load_bronze_config, load_gold_config, load_silver_config, repo_root
 
 ROOT = repo_root()
 
@@ -54,15 +54,21 @@ def test_job_tasks_match_configured_sources_and_notebooks():
 
 def test_no_credential_literal_is_committed():
     prohibited = re.compile(r"(AKIA[0-9A-Z]{16}|mongodb(\+srv)?://[^<\s]+:[^<\s]+@|password\s*=\s*['\"][^'\"]+['\"])", re.IGNORECASE)
-    files = list((ROOT / "src").rglob("*")) + list((ROOT / "retail_platform").rglob("*.py")) + list((ROOT / "resources").rglob("*.yml")) + [ROOT / "databricks.yml"]
+    files = list((ROOT / "src").rglob("*")) + list((ROOT / "common_utils").rglob("*.py")) + list((ROOT / "resources").rglob("*.yml")) + [ROOT / "databricks.yml"]
     for path in files:
         if path.is_file():
             assert not prohibited.search(path.read_text(errors="ignore")), f"credential-like literal in {path}"
 
 
-def test_notebooks_bootstrap_the_library_path():
-    for notebook in (ROOT / "src").rglob("*.py"):
-        text = notebook.read_text()
-        assert text.startswith("# Databricks notebook source"), notebook
-        assert '(candidate / "retail_platform").is_dir()' in text, f"{notebook} does not bootstrap sys.path"
-        assert "widget_context(" in text, f"{notebook} does not build a RunContext"
+def test_notebooks_are_valid_ipynb_and_bootstrap_the_library_path():
+    import json
+
+    notebooks = list((ROOT / "src").rglob("*.ipynb"))
+    assert {n.name for n in notebooks} == {"land_source.ipynb", "ds2b.ipynb", "b2s.ipynb", "s2g.ipynb"}
+    for notebook in notebooks:
+        nb = json.loads(notebook.read_text())
+        assert nb["nbformat"] == 4 and nb["cells"], notebook
+        code = "\n".join("".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code")
+        assert '(candidate / "common_utils").is_dir()' in code, f"{notebook} does not bootstrap sys.path"
+        assert "widget_context(" in code, f"{notebook} does not build a RunContext"
+        assert all(not c.get("outputs") for c in nb["cells"] if c["cell_type"] == "code"), f"{notebook} has committed outputs"

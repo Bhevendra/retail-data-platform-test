@@ -1,6 +1,6 @@
 # Data dictionary
 
-Generated from `src/config/*.json`. Regenerate with `python -m retail_platform.gold`.
+Generated from `src/config/*.json`. Regenerate with `python -m common_utils.gold`.
 
 ## Gold (serve here)
 

@@ -24,7 +24,7 @@ def scratch(spark):
 
 
 def test_scd2_merge_tracks_history_and_is_idempotent(spark, scratch):
-    from retail_platform.scd import merge_type_2, row_hash
+    from common_utils.scd import merge_type_2, row_hash
 
     catalog, schema = scratch
     target = f"`{catalog}`.`{schema}`.`dim`"
@@ -45,7 +45,7 @@ def test_scd2_merge_tracks_history_and_is_idempotent(spark, scratch):
 
 
 def test_bronze_write_is_idempotent_per_load_date(spark, scratch):
-    from retail_platform.bronze import write_idempotent
+    from common_utils.bronze import write_idempotent
 
     catalog, schema = scratch
     df = spark.createDataFrame([(1, date(2026, 9, 1)), (2, date(2026, 9, 1))], "id int, _load_date date")

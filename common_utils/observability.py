@@ -12,8 +12,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from retail_platform.config import qualified
-from retail_platform.runtime import RunContext, get_logger, log
+from common_utils.config import qualified
+from common_utils.runtime import RunContext, get_logger, log
 
 PIPELINE_RUNS_TABLE = "pipeline_runs"
 PIPELINE_RUNS_SCHEMA = (

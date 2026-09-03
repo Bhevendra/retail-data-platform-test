@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
-from retail_platform.governance import table_exists
+from common_utils.governance import table_exists
 
 SCD2_COLUMNS = ["effective_from", "effective_to", "is_current"]
 HASH_COLUMN = "_row_hash"

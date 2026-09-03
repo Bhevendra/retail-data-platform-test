@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from retail_platform.config import (
+from common_utils.config import (
     BronzeConfig,
     ConfigError,
     GoldConfig,
@@ -90,7 +90,7 @@ def test_gold_rejects_unknown_foreign_key_target():
 
 
 def test_configs_are_valid_json_with_no_trailing_commas():
-    from retail_platform.config import repo_root
+    from common_utils.config import repo_root
 
     for name in ("bronze", "silver", "gold"):
         json.loads((repo_root() / "src" / "config" / f"{name}.json").read_text())

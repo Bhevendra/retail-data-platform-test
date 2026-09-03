@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any
 
-LOGGER_NAME = "retail_platform"
+LOGGER_NAME = "common_utils"
 
 
 class _JsonFormatter(logging.Formatter):
@@ -37,10 +37,10 @@ class _JsonFormatter(logging.Formatter):
 def get_logger(name: str = LOGGER_NAME) -> logging.Logger:
     """Return a logger that emits one JSON object per line (easy to ship to a SIEM / log sink)."""
     logger = logging.getLogger(name)
-    if not any(getattr(h, "_retail_platform", False) for h in logger.handlers):
+    if not any(getattr(h, "_common_utils", False) for h in logger.handlers):
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(_JsonFormatter())
-        handler._retail_platform = True  # type: ignore[attr-defined]
+        handler._common_utils = True  # type: ignore[attr-defined]
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
         logger.propagate = False

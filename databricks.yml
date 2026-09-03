@@ -7,7 +7,7 @@ include:
 sync:
   include:
     - src/**
-    - retail_platform/**
+    - common_utils/**
 
 variables:
   catalog:

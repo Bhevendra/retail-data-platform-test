@@ -30,7 +30,7 @@ deploys with **Databricks Asset Bundles**.
 
 | Concern | How it is handled |
 | --- | --- |
-| Configuration as contract | `src/config/*.json` are validated by typed models (`retail_platform/config.py`) before any Spark work; CI fails on a bad config. |
+| Configuration as contract | `src/config/*.json` are validated by typed models (`common_utils/config.py`) before any Spark work; CI fails on a bad config. |
 | Idempotency | Raw landing, Bronze (`replaceWhere` on `_load_date`), Silver (hash-based SCD merges) and Gold (full rebuild) can all be re-run for any date without duplicates. Backfill = `--params run_date=YYYY-MM-DD`. |
 | Data quality | Declarative rules (`not_null`, `unique`, `accepted_values`, `regex`, `range`, `min_row_count`, `expression`), `error`/`warn` severity, per-source `fail` / `quarantine` / `warn` behaviour, every result stored in `ops.data_quality_results`. |
 | Observability | Structured JSON logs and one row per run/task/entity in `ops.pipeline_runs` (status, rows, duration, error). Job emails on failure and on duration SLA breach. |
@@ -42,7 +42,7 @@ deploys with **Databricks Asset Bundles**.
 ## Repository layout
 
 ```
-retail_platform/      library (unit-tested; Serverless-safe)
+common_utils/      library (unit-tested; Serverless-safe)
   config.py           typed config models + validation
   runtime.py          RunContext, widgets, JSON logging
   sources.py          connectors + raw landing
@@ -55,8 +55,8 @@ retail_platform/      library (unit-tested; Serverless-safe)
   observability.py    ops.pipeline_runs
 src/
   config/             bronze.json, silver.json, gold.json  <- the contract
-  ingestion/land_source.py   one parameterised landing notebook (source_name)
-  bronze/ds2b.py      silver/b2s.py      gold/s2g.py
+  ingestion/land_source.ipynb   one parameterised landing notebook (source_name)
+  bronze/ds2b.ipynb      silver/b2s.ipynb      gold/s2g.ipynb
 resources/jobs.yml    Serverless job: 3 landing tasks -> ds2b -> b2s -> s2g
 tests/                unit tests (local Spark) + Databricks integration tests
 docs/                 architecture, consumers guide, operations runbook, data dictionary, ADRs
@@ -88,7 +88,7 @@ subset such as `sources`, `entities`, `products`), so you can run `ds2b` for jus
   `resources/jobs.yml` (the contract test will remind you). No Python changes needed.
 * **New Silver entity / transformation**: edit `src/config/silver.json`.
 * **New Gold product**: add a `table`, `view` or `metric_view` to `src/config/gold.json`
-  with `primary_key`, `foreign_keys` and `column_comments`; run `python -m retail_platform.gold`
+  with `primary_key`, `foreign_keys` and `column_comments`; run `python -m common_utils.gold`
   to regenerate the data dictionary.
 
 Design decisions are recorded in `docs/adr/`.

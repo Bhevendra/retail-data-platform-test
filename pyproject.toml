@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 [tool.ruff]
 line-length = 160
 target-version = "py310"
-extend-exclude = ["src/**"]  # notebooks use Databricks magics and implicit spark/dbutils globals
+extend-exclude = ["src/**"]  # notebooks (.ipynb) use Databricks magics and implicit spark/dbutils globals
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "W"]

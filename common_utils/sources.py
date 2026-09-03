@@ -18,8 +18,8 @@ from urllib.parse import urlparse
 
 from pyspark.sql import functions as F
 
-from retail_platform.config import Source
-from retail_platform.runtime import get_logger, log
+from common_utils.config import Source
+from common_utils.runtime import get_logger, log
 
 _LANDING_FOLDER = "load_date={run_date}"
 

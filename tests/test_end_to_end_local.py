@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 from pyspark.sql import functions as F
 
-from retail_platform.config import load_gold_config, load_silver_config
-from retail_platform.gold import date_dimension, render_sql
-from retail_platform.quality import evaluate_rules
-from retail_platform.runtime import RunContext
-from retail_platform.silver import prepare
+from common_utils.config import load_gold_config, load_silver_config
+from common_utils.gold import date_dimension, render_sql
+from common_utils.quality import evaluate_rules
+from common_utils.runtime import RunContext
+from common_utils.silver import prepare
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

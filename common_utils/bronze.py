@@ -18,11 +18,11 @@ from dataclasses import dataclass
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from retail_platform.config import BronzeConfig, Source, qualified
-from retail_platform.governance import govern_table, table_exists
-from retail_platform.quality import evaluate_rules, persist_results, raise_for_blocking_failures, split_quarantine
-from retail_platform.runtime import RunContext, get_logger, log
-from retail_platform.sources import read_landed_raw
+from common_utils.config import BronzeConfig, Source, qualified
+from common_utils.governance import govern_table, table_exists
+from common_utils.quality import evaluate_rules, persist_results, raise_for_blocking_failures, split_quarantine
+from common_utils.runtime import RunContext, get_logger, log
+from common_utils.sources import read_landed_raw
 
 AUDIT_COLUMNS = ["_load_date", "_ingested_at", "_run_id", "_source_system", "_source_file", "last_update_ts", "file_path"]
 QUARANTINE_SUFFIX = "_quarantine"

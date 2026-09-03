@@ -5,12 +5,12 @@ from datetime import date
 import pytest
 from pyspark.sql import Row
 
-from retail_platform.config import QualityRule, SilverEntity, Transformations
-from retail_platform.gold import date_dimension, render_sql
-from retail_platform.quality import evaluate_rules, split_quarantine
-from retail_platform.runtime import RunContext, parse_run_date
-from retail_platform.scd import HASH_COLUMN, deduplicate, row_hash
-from retail_platform.silver import apply_transformations, business_columns, prepare
+from common_utils.config import QualityRule, SilverEntity, Transformations
+from common_utils.gold import date_dimension, render_sql
+from common_utils.quality import evaluate_rules, split_quarantine
+from common_utils.runtime import RunContext, parse_run_date
+from common_utils.scd import HASH_COLUMN, deduplicate, row_hash
+from common_utils.silver import apply_transformations, business_columns, prepare
 
 
 def rule(**kwargs):
@@ -136,7 +136,7 @@ def test_parse_run_date_accepts_job_parameter_forms(value, expected):
 
 
 def test_cosmos_schema_inference_handles_nulls_and_mixed_types(spark):
-    from retail_platform.sources import _coerce, infer_schema
+    from common_utils.sources import _coerce, infer_schema
 
     rows = [{"a": 1, "b": None, "c": "x", "d": 1.5, "e": True}, {"a": 2, "b": None, "c": 3, "d": 2}]
     schema = infer_schema(rows)

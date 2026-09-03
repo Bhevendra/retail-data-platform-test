@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from retail_platform.config import QualityRule, qualified
-from retail_platform.runtime import RunContext
+from common_utils.config import QualityRule, qualified
+from common_utils.runtime import RunContext
 
 RESULTS_TABLE = "data_quality_results"
 RESULTS_SCHEMA = (

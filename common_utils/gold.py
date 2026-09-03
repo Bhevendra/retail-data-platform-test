@@ -21,10 +21,10 @@ from dataclasses import dataclass
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from retail_platform.config import GoldConfig, GoldProduct, qualified
-from retail_platform.governance import govern_table, govern_view
-from retail_platform.quality import evaluate_rules, persist_results, raise_for_blocking_failures
-from retail_platform.runtime import RunContext, get_logger, log
+from common_utils.config import GoldConfig, GoldProduct, qualified
+from common_utils.governance import govern_table, govern_view
+from common_utils.quality import evaluate_rules, persist_results, raise_for_blocking_failures
+from common_utils.runtime import RunContext, get_logger, log
 
 
 @dataclass(frozen=True)
@@ -114,7 +114,7 @@ def build_product(spark, ctx: RunContext, config: GoldConfig, product: GoldProdu
 
 def data_dictionary_markdown(bronze, silver, gold) -> str:
     """Render the configured data dictionary (used for docs/data-dictionary.md and shared with consumers)."""
-    lines = ["# Data dictionary", "", "Generated from `src/config/*.json`. Regenerate with `python -m retail_platform.gold`.", ""]
+    lines = ["# Data dictionary", "", "Generated from `src/config/*.json`. Regenerate with `python -m common_utils.gold`.", ""]
     lines += ["## Gold (serve here)", ""]
     for product in gold.ordered_products():
         lines.append(f"### `{gold.platform.catalog}.{gold.gold_schema}.{product.name}` ({product.type})")
@@ -150,7 +150,7 @@ def data_dictionary_markdown(bronze, silver, gold) -> str:
 if __name__ == "__main__":  # pragma: no cover - CLI helper
     from pathlib import Path
 
-    from retail_platform.config import load_bronze_config, load_gold_config, load_silver_config, repo_root
+    from common_utils.config import load_bronze_config, load_gold_config, load_silver_config, repo_root
 
     out = repo_root() / "docs" / "data-dictionary.md"
     Path(out).write_text(data_dictionary_markdown(load_bronze_config(), load_silver_config(), load_gold_config()), encoding="utf-8")

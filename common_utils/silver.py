@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
-from retail_platform.bronze import AUDIT_COLUMNS
-from retail_platform.config import SilverConfig, SilverEntity, Transformations, qualified
-from retail_platform.governance import govern_table
-from retail_platform.quality import evaluate_rules, persist_results, raise_for_blocking_failures
-from retail_platform.runtime import RunContext, get_logger, log
-from retail_platform.scd import HASH_COLUMN, SCD2_COLUMNS, deduplicate, merge_type_1, merge_type_2, row_hash
+from common_utils.bronze import AUDIT_COLUMNS
+from common_utils.config import SilverConfig, SilverEntity, Transformations, qualified
+from common_utils.governance import govern_table
+from common_utils.quality import evaluate_rules, persist_results, raise_for_blocking_failures
+from common_utils.runtime import RunContext, get_logger, log
+from common_utils.scd import HASH_COLUMN, SCD2_COLUMNS, deduplicate, merge_type_1, merge_type_2, row_hash
 
 LINEAGE_COLUMNS = ["_run_id", "_load_date", "_silver_updated_at"]
 
