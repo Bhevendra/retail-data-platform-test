@@ -29,6 +29,7 @@ Cosmos DB / S3 / SQL Server
 
 * `src/<layer>/config/` — one JSON configuration per pipeline notebook/task.
 * `common_utils/` — reusable config, secret, ingestion, quality, and SCD helpers.
+* `src/ingestion/` — three source-specific ingestion notebooks, each landing data in the raw Unity Catalog volume.
 * `src/<layer>/notebook/` — Databricks source notebooks: `ds2b`, `b2s`, `s2g`.
 * `resources/` — DAB jobs and pipeline permissions.
 * `tests/` — fast local unit tests for config and transformation logic.

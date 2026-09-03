@@ -18,7 +18,7 @@ for candidate in [Path.cwd(), *Path.cwd().parents]:
 from common_utils.config import load_config, qualified
 from common_utils.governance import apply_governance, bootstrap_namespace, tag_columns
 from common_utils.quality import evaluate_rules, persist_results, raise_for_blocking_failures
-from common_utils.sources import land_raw, read_source
+from common_utils.sources import read_landed_raw
 from pyspark.sql import functions as F
 
 dbutils.widgets.text("config_path", "src/bronze/config/bronze.json")
@@ -36,8 +36,7 @@ run_id = str(uuid.uuid4())
 volume_path = f"/Volumes/{catalog}/{schema}/{platform['raw_volume']}"
 
 for source in config["sources"]:
-    source_df = read_source(spark, dbutils, source, scope)
-    raw_path = land_raw(spark, dbutils, source_df, source, volume_path, date.today().isoformat())
+    source_df, raw_path = read_landed_raw(spark, source, volume_path, date.today().isoformat())
     bronze_df = (source_df
         .withColumn("last_update_ts", F.current_timestamp())
         .withColumn("file_path", F.lit(raw_path))

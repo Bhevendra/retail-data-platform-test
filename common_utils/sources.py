@@ -32,3 +32,12 @@ def land_raw(spark, dbutils, df, source: dict, volume_path: str, load_date: str)
     else:
         df.write.mode("overwrite").option("header", "true").csv(target)
     return target
+
+
+def read_landed_raw(spark, source: dict, volume_path: str, load_date: str):
+    """Read the source-specific original-format files landed by an ingestion task."""
+    path = f"{volume_path}/{source['name']}/load_date={load_date}"
+    reader = spark.read.format(source["format"])
+    if source["format"] == "csv":
+        reader = reader.option("header", "true").option("inferSchema", "true")
+    return reader.load(path), path
