@@ -1,0 +1,8 @@
+customer_id,customer_name,product_name,order_date,product_category,product,total_price
+1003,x,Sioneer VSX-534 Receiver,2019-08-10,Ramsung,"{""curr"":""USD"",""id"":""P1"",""name"":""Ramsung Galaxy Tab 10"",""price"":400,""qty"":2,""unit"":""pcs""}",800
+1001,x,"Opple NakBook - 12 - English""",2019-09-11,Sioneer,"{""curr"":""USD"",""id"":""P2"",""name"":""Sioneer VSX-534 Receiver"",""price"":481,""qty"":1,""unit"":""pcs""}",481
+1003,x,Mogitech G920 Racing Wheel,2019-08-12,Opple,"{""curr"":""USD"",""id"":""P3"",""name"":""Opple NakBook - 12 - English"""",""price"":832,""qty"":3,""unit"":""pcs""}",2496
+1003,x,4K Projection Screen,2019-09-13,NULL,"{""curr"":""USD"",""id"":""P4"",""name"":""Mogitech G920 Racing Wheel"",""price"":761,""qty"":3,""unit"":""pcs""}",2283
+1001,x,Ramsung Galaxy Tab 10,2019-08-14,NULL,"{""curr"":""USD"",""id"":""P5"",""name"":""4K Projection Screen"",""price"":643,""qty"":4,""unit"":""pcs""}",2572
+1003,x,Sioneer VSX-534 Receiver,2019-09-15,Ramsung,"{""curr"":""USD"",""id"":""P1"",""name"":""Ramsung Galaxy Tab 10"",""price"":145,""qty"":3,""unit"":""pcs""}",435
+1003,x,Sioneer VSX-534 Receiver,2019-08-10,Ramsung,"{""curr"":""USD"",""id"":""P1"",""name"":""Ramsung Galaxy Tab 10"",""price"":400,""qty"":2,""unit"":""pcs""}",800

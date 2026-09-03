@@ -7,7 +7,7 @@ include:
 sync:
   include:
     - src/**
-    - common_utils/**
+    - retail_platform/**
 
 variables:
   catalog:
@@ -15,12 +15,15 @@ variables:
     default: retaildataplatform
   secret_scope:
     description: Databricks secret scope containing source credentials.
-  warehouse_id:
-    description: SQL warehouse ID used for SQL tasks when needed.
+  alert_email:
+    description: Mailbox notified on job failure / SLA breach.
+    default: ravidataen@gmail.com
+  schedule_pause_status:
+    description: PAUSED in non-production targets so only prod runs on the clock.
+    default: PAUSED
+  run_as_service_principal:
+    description: Service principal the production job runs as (empty = deploying user).
     default: ""
-  service_principal_name:
-    description: Principal granted job run privileges.
-    default: account users
 
 targets:
   dev:
@@ -30,6 +33,7 @@ targets:
       host: https://dbc-5cf81efb-3cb1.cloud.databricks.com
     variables:
       secret_scope: retail-platform-dev
+
   prod:
     mode: production
     workspace:
@@ -37,3 +41,7 @@ targets:
       root_path: /Workspace/.bundle/${bundle.name}/${bundle.target}
     variables:
       secret_scope: retail-platform-prod
+      schedule_pause_status: UNPAUSED
+    # Uncomment once the production service principal exists:
+    # run_as:
+    #   service_principal_name: ${var.run_as_service_principal}

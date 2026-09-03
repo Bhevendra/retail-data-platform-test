@@ -1,0 +1,332 @@
+{
+  "platform": {
+    "catalog": "retaildataplatform",
+    "bronze_schema": "bronze",
+    "silver_schema": "silver",
+    "ops_schema": "ops",
+    "owner": null,
+    "tags": {
+      "domain": "retail",
+      "classification": "internal",
+      "managed_by": "retail-data-platform"
+    },
+    "grants": {}
+  },
+  "entities": [
+    {
+      "source_table": "sales_orders",
+      "target_table": "sales_orders",
+      "description": "E-commerce orders from the web shop (Cosmos DB), one row per order version. The source re-emits an order when line items are added, so the same order_number can appear more than once in an extract; the latest document (by Cosmos _id) wins and earlier states are kept as history (SCD2). Nested line items, promotions and click-stream are parsed into typed arrays.",
+      "primary_keys": [
+        "order_number"
+      ],
+      "scd_type": 2,
+      "order_by": "source_document_id",
+      "pii_columns": [
+        "customer_name"
+      ],
+      "transformations": {
+        "rename": {
+          "_id": "source_document_id"
+        },
+        "cast": {
+          "order_number": "bigint",
+          "customer_id": "bigint",
+          "number_of_line_items": "int",
+          "order_datetime": "bigint"
+        },
+        "parse_json": {
+          "ordered_products": "array<struct<curr:string,id:string,name:string,price:string,qty:string,unit:string,promotion_info:struct<promo_disc:double,promo_id:string,promo_item:string,promo_qty:string>>>",
+          "clicked_items": "array<array<string>>",
+          "promo_info": "array<struct<promo_disc:double,promo_id:string,promo_item:string,promo_qty:string>>"
+        },
+        "derived": {
+          "customer_name": "regexp_replace(trim(customer_name), '\\\\s+', ' ')",
+          "order_ts": "CAST(order_datetime AS TIMESTAMP)",
+          "order_date": "CAST(CAST(order_datetime AS TIMESTAMP) AS DATE)",
+          "line_item_count": "size(ordered_products)",
+          "has_promotion": "size(promo_info) > 0",
+          "order_gross_amount": "CAST(aggregate(ordered_products, CAST(0 AS DOUBLE), (acc, p) -> acc + CAST(p.price AS DOUBLE) * CAST(p.qty AS DOUBLE)) AS DECIMAL(14,2))"
+        },
+        "drop": [
+          "order_datetime"
+        ]
+      },
+      "cluster_by": [
+        "order_number"
+      ],
+      "column_comments": {
+        "order_number": "Business key of the order (web shop order number).",
+        "source_document_id": "Cosmos DB document _id; increases with insertion time and orders versions of the same order.",
+        "customer_id": "Customer business key; joins silver.customers.customer_id.",
+        "customer_name": "Customer name as captured at order time (may differ from the CRM master).",
+        "number_of_line_items": "Line-item count reported by the source (can lag ordered_products; see line_item_count).",
+        "line_item_count": "Actual number of entries in ordered_products.",
+        "order_ts": "Order timestamp (UTC), derived from the source epoch seconds. NULL for a small share of orders.",
+        "order_date": "Order date (UTC).",
+        "ordered_products": "Line items: product id, name, unit price, quantity, unit and optional promotion (discount rate applies to the line).",
+        "clicked_items": "Click-stream pairs [product_id, click_count] captured before checkout.",
+        "promo_info": "Promotions applied at order level (mirrors the line-level promotion_info).",
+        "has_promotion": "TRUE when at least one promotion was applied.",
+        "order_gross_amount": "Sum of price x quantity over ordered_products, before discounts."
+      },
+      "quality_rules": [
+        {
+          "name": "order_number_not_null",
+          "type": "not_null",
+          "column": "order_number",
+          "severity": "error"
+        },
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "order_ts_present",
+          "type": "not_null",
+          "column": "order_ts",
+          "severity": "warn",
+          "description": "About 1% of source orders have no timestamp; they are kept but excluded from date joins."
+        },
+        {
+          "name": "line_items_parsed",
+          "type": "expression",
+          "expression": "line_item_count > 0",
+          "severity": "error",
+          "description": "ordered_products must parse into at least one line."
+        },
+        {
+          "name": "line_count_consistent",
+          "type": "expression",
+          "expression": "number_of_line_items = line_item_count",
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "source_table": "sales",
+      "target_table": "sales",
+      "description": "Point-of-sale transactions exported to S3, one row per product sold (SCD1). The feed has no transaction identifier, so sale_id is a deterministic hash of the business columns; exact duplicate rows in the export collapse into one. The nested product JSON is parsed with regular expressions because ~8% of names contain unescaped quotes.",
+      "primary_keys": [
+        "sale_id"
+      ],
+      "scd_type": 1,
+      "order_by": "_ingested_at",
+      "pii_columns": [
+        "customer_name"
+      ],
+      "transformations": {
+        "rename": {
+          "product_name": "listed_product_name",
+          "product_category": "brand",
+          "total_price": "total_amount",
+          "product": "product_json"
+        },
+        "cast": {
+          "customer_id": "bigint",
+          "order_date": "date",
+          "total_amount": "decimal(14,2)"
+        },
+        "derived": {
+          "sale_id": "sha2(concat_ws('|', CAST(customer_id AS STRING), CAST(order_date AS STRING), product_json, listed_product_name, CAST(total_amount AS STRING)), 256)",
+          "customer_name": "regexp_replace(trim(customer_name), '\\\\s+', ' ')",
+          "product_id": "regexp_extract(product_json, '\"id\":\"([^\"]+)\"', 1)",
+          "product_name": "regexp_extract(product_json, '\"name\":\"(.*)\",\"price\"', 1)",
+          "unit_price": "CAST(regexp_extract(product_json, '\"price\":([0-9.]+)', 1) AS DECIMAL(12,2))",
+          "quantity": "CAST(regexp_extract(product_json, '\"qty\":([0-9]+)', 1) AS INT)",
+          "currency": "regexp_extract(product_json, '\"curr\":\"([^\"]+)\"', 1)"
+        },
+        "drop": [
+          "product_json"
+        ]
+      },
+      "cluster_by": [
+        "order_date",
+        "customer_id"
+      ],
+      "column_comments": {
+        "sale_id": "Deterministic SHA-256 over customer, date, product payload and amount; stable across reloads.",
+        "customer_id": "Customer business key; joins silver.customers.customer_id.",
+        "customer_name": "Customer name as printed on the receipt.",
+        "listed_product_name": "Product name column from the export; often differs from the product actually sold (see product_name).",
+        "product_id": "Catalogue product id of the item sold (parsed from the product payload).",
+        "product_name": "Name of the item sold (parsed from the product payload; authoritative).",
+        "brand": "Brand/category reported by the export.",
+        "order_date": "Sale date.",
+        "unit_price": "Unit price in `currency`.",
+        "quantity": "Units sold.",
+        "currency": "ISO currency code of the amounts.",
+        "total_amount": "Line total from the export (= unit_price x quantity)."
+      },
+      "quality_rules": [
+        {
+          "name": "sale_id_not_null",
+          "type": "not_null",
+          "column": "sale_id",
+          "severity": "error"
+        },
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "product_parsed",
+          "type": "expression",
+          "expression": "product_id IS NOT NULL AND product_id <> '' AND unit_price IS NOT NULL AND quantity IS NOT NULL",
+          "severity": "error"
+        },
+        {
+          "name": "amount_reconciles",
+          "type": "expression",
+          "expression": "total_amount = unit_price * quantity",
+          "severity": "warn"
+        },
+        {
+          "name": "positive_amount",
+          "type": "range",
+          "column": "total_amount",
+          "min": 0,
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "source_table": "customers",
+      "target_table": "customers",
+      "description": "Customer master from the CRM (Azure SQL). The source carries its own validity window (valid_from / valid_to) and can contain more than one version per customer; the latest source version per customer_id is loaded and change history across loads is kept (SCD2). Use is_current = true for the latest version and is_active for customers still open in the CRM.",
+      "primary_keys": [
+        "customer_id"
+      ],
+      "scd_type": 2,
+      "order_by": "source_valid_from",
+      "pii_columns": [
+        "tax_id",
+        "customer_name",
+        "first_name",
+        "last_name",
+        "street",
+        "number",
+        "unit",
+        "ship_to_address",
+        "lon",
+        "lat"
+      ],
+      "transformations": {
+        "rename": {
+          "valid_from": "source_valid_from",
+          "valid_to": "source_valid_to"
+        },
+        "cast": {
+          "customer_id": "bigint",
+          "tax_id": "string",
+          "postcode": "string",
+          "number": "string",
+          "district": "string",
+          "lon": "double",
+          "lat": "double",
+          "source_valid_from": "bigint",
+          "source_valid_to": "bigint",
+          "units_purchased": "int",
+          "loyalty_segment": "int"
+        },
+        "derived": {
+          "customer_name": "regexp_replace(trim(customer_name), '\\\\s+', ' ')",
+          "customer_type": "CASE WHEN customer_name LIKE '%,%' THEN 'individual' ELSE 'organisation' END",
+          "last_name": "CASE WHEN customer_name LIKE '%,%' THEN trim(split_part(customer_name, ',', 1)) END",
+          "first_name": "CASE WHEN customer_name LIKE '%,%' THEN trim(split_part(customer_name, ',', 2)) END",
+          "postcode": "nullif(regexp_replace(postcode, '\\\\.0$', ''), '0')",
+          "number": "regexp_replace(number, '\\\\.0$', '')",
+          "district": "regexp_replace(district, '\\\\.0$', '')",
+          "source_valid_from_ts": "CAST(source_valid_from AS TIMESTAMP)",
+          "source_valid_to_ts": "CAST(source_valid_to AS TIMESTAMP)",
+          "is_active": "source_valid_to IS NULL",
+          "loyalty_segment_name": "CASE loyalty_segment WHEN 0 THEN 'Bronze' WHEN 1 THEN 'Silver' WHEN 2 THEN 'Gold' WHEN 3 THEN 'Platinum' ELSE 'Unknown' END"
+        },
+        "null_literals": [
+          "",
+          "NULL",
+          "null",
+          "N/A",
+          "NA",
+          "NA NA",
+          "nan"
+        ]
+      },
+      "cluster_by": [
+        "customer_id"
+      ],
+      "column_comments": {
+        "customer_id": "Customer business key (CRM id).",
+        "tax_id": "Tax identifier when known (mostly null).",
+        "tax_code": "Tax code when known.",
+        "customer_name": "Name as 'LAST, FIRST' for individuals or the organisation name.",
+        "customer_type": "'individual' (name has a comma) or 'organisation'.",
+        "last_name": "Family name for individuals; NULL for organisations.",
+        "first_name": "Given name(s) for individuals; NULL for organisations.",
+        "state": "US state code of the address.",
+        "city": "City of the address (may be missing).",
+        "postcode": "Postal code, normalised (no trailing .0; 0 becomes NULL).",
+        "street": "Street name.",
+        "number": "House / building number, normalised.",
+        "unit": "Apartment / unit when present.",
+        "region": "Region as captured by the CRM (inconsistent: state code or name).",
+        "district": "County / district as captured by the CRM (inconsistent codes and names).",
+        "lon": "Longitude of the address.",
+        "lat": "Latitude of the address.",
+        "ship_to_address": "Concatenated shipping address string from the CRM.",
+        "source_valid_from": "CRM validity start (epoch seconds).",
+        "source_valid_to": "CRM validity end (epoch seconds); NULL while active.",
+        "source_valid_from_ts": "CRM validity start (UTC timestamp).",
+        "source_valid_to_ts": "CRM validity end (UTC timestamp); NULL while active.",
+        "is_active": "TRUE when the CRM record is still open (no valid_to).",
+        "units_purchased": "Lifetime units purchased according to the CRM.",
+        "loyalty_segment": "Loyalty segment code 0-3 from the CRM.",
+        "loyalty_segment_name": "Loyalty segment label (0 Bronze, 1 Silver, 2 Gold, 3 Platinum)."
+      },
+      "quality_rules": [
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "unique_customer_id",
+          "type": "unique",
+          "column": "customer_id",
+          "severity": "error",
+          "description": "Guaranteed after de-duplication on the latest source version."
+        },
+        {
+          "name": "state_code_format",
+          "type": "regex",
+          "column": "state",
+          "pattern": "^[A-Z]{2}$",
+          "severity": "warn"
+        },
+        {
+          "name": "loyalty_segment_values",
+          "type": "accepted_values",
+          "column": "loyalty_segment",
+          "values": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "severity": "warn"
+        },
+        {
+          "name": "coordinates_in_range",
+          "type": "expression",
+          "expression": "lon BETWEEN -180 AND 180 AND lat BETWEEN -90 AND 90",
+          "severity": "warn"
+        }
+      ]
+    }
+  ]
+}

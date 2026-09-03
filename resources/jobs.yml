@@ -2,85 +2,122 @@ resources:
   jobs:
     retail_data_platform:
       name: retail-data-platform-${bundle.target}
+      description: >-
+        Daily medallion load: land Cosmos DB, S3 and SQL Server extracts in the raw volume,
+        build Bronze (audit + quality), Silver (SCD1/SCD2) and the Gold star schema + semantic layer.
       max_concurrent_runs: 1
+      timeout_seconds: 7200
+      queue:
+        enabled: true
       tags:
         application: retail-data-platform
         environment: ${bundle.target}
         owner: data-engineering
-      job_clusters:
-        - job_cluster_key: ingestion_cluster
-          new_cluster:
-            spark_version: 15.4.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            num_workers: 2
-            data_security_mode: USER_ISOLATION
+        cost_center: analytics
+
+      schedule:
+        quartz_cron_expression: "0 0 5 * * ?"   # 05:00 UTC daily, after upstream exports
+        timezone_id: UTC
+        pause_status: ${var.schedule_pause_status}
+
+      email_notifications:
+        on_failure: [ "${var.alert_email}" ]
+        on_duration_warning_threshold_exceeded: [ "${var.alert_email}" ]
+        no_alert_for_skipped_runs: true
+      health:
+        rules:
+          - metric: RUN_DURATION_SECONDS
+            op: GREATER_THAN
+            value: 3600
+
+      # Job-level parameters flow into every notebook widget with the same name,
+      # so a backfill is just `databricks bundle run retail_data_platform --params run_date=2026-09-01`.
+      parameters:
+        - name: run_date
+          default: "{{job.start_time.iso_date}}"
+        - name: environment
+          default: ${bundle.target}
+        - name: catalog
+          default: ${var.catalog}
+        - name: secret_scope
+          default: ${var.secret_scope}
+
+      # Serverless compute: Python dependencies are declared once here (no cluster JARs needed;
+      # the SQL Server JDBC driver ships with the runtime).
+      environments:
+        - environment_key: platform
+          spec:
+            client: "2"
+            dependencies:
+              - pymongo==4.10.1
+              - boto3==1.35.98
+              - databricks-sdk>=0.40.0
+
       tasks:
-        - task_key: ingest_cosmos
-          job_cluster_key: ingestion_cluster
+        - task_key: land_cosmos
+          environment_key: platform
+          max_retries: 2
+          min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/cosmos_to_volume.py
+            notebook_path: ../src/ingestion/land_source.py
             base_parameters:
-              config_path: src/bronze/config/bronze.json
-              catalog: ${var.catalog}
-              secret_scope: ${var.secret_scope}
-          libraries:
-            - pypi:
-                package: pymongo==4.10.1
-        - task_key: ingest_s3
-          job_cluster_key: ingestion_cluster
+              config_path: src/config/bronze.json
+              source_name: cosmos_sales_orders
+
+        - task_key: land_s3
+          environment_key: platform
+          max_retries: 2
+          min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/s3_to_volume.py
+            notebook_path: ../src/ingestion/land_source.py
             base_parameters:
-              config_path: src/bronze/config/bronze.json
-              catalog: ${var.catalog}
-              secret_scope: ${var.secret_scope}
-          libraries:
-            - pypi:
-                package: boto3==1.35.98
-        - task_key: ingest_sqlserver
-          job_cluster_key: ingestion_cluster
+              config_path: src/config/bronze.json
+              source_name: s3_sales
+
+        - task_key: land_sqlserver
+          environment_key: platform
+          max_retries: 2
+          min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/sqlserver_to_volume.py
+            notebook_path: ../src/ingestion/land_source.py
             base_parameters:
-              config_path: src/bronze/config/bronze.json
-              catalog: ${var.catalog}
-              secret_scope: ${var.secret_scope}
-          libraries:
-            - maven:
-                coordinates: com.microsoft.sqlserver:mssql-jdbc:12.6.1.jre8
+              config_path: src/config/bronze.json
+              source_name: sqlserver_customers
+
         - task_key: ds2b
           depends_on:
-            - task_key: ingest_cosmos
-            - task_key: ingest_s3
-            - task_key: ingest_sqlserver
-          job_cluster_key: ingestion_cluster
+            - task_key: land_cosmos
+            - task_key: land_s3
+            - task_key: land_sqlserver
+          run_if: ALL_SUCCESS
+          environment_key: platform
+          max_retries: 1
           notebook_task:
-            notebook_path: ../src/bronze/notebook/ds2b.py
+            notebook_path: ../src/bronze/ds2b.py
             base_parameters:
-              config_path: src/bronze/config/bronze.json
-              environment: ${bundle.target}
-              catalog: ${var.catalog}
-              secret_scope: ${var.secret_scope}
+              config_path: src/config/bronze.json
+
         - task_key: b2s
           depends_on:
             - task_key: ds2b
-          job_cluster_key: ingestion_cluster
+          environment_key: platform
+          max_retries: 1
           notebook_task:
-            notebook_path: ../src/silver/notebook/b2s.py
+            notebook_path: ../src/silver/b2s.py
             base_parameters:
-              config_path: src/silver/config/silver.json
-              environment: ${bundle.target}
-              catalog: ${var.catalog}
+              config_path: src/config/silver.json
+              detect_deletes: "false"
+
         - task_key: s2g
           depends_on:
             - task_key: b2s
-          job_cluster_key: ingestion_cluster
+          environment_key: platform
+          max_retries: 1
           notebook_task:
-            notebook_path: ../src/gold/notebook/s2g.py
+            notebook_path: ../src/gold/s2g.py
             base_parameters:
-              config_path: src/gold/config/gold.json
-              environment: ${bundle.target}
-              catalog: ${var.catalog}
+              config_path: src/config/gold.json
+
       permissions:
-        - level: CAN_MANAGE_RUN
-          group_name: ${var.service_principal_name}
+        - level: CAN_VIEW
+          group_name: users

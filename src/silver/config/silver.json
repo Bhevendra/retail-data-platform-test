@@ -1,8 +1,0 @@
-{
-  "platform": {"catalog": "retaildataplatform", "bronze_schema": "bronze", "silver_schema": "silver", "owner": "data-engineering"},
-  "entities": [
-    {"source_table": "sales_orders", "target_table": "sales_orders", "primary_keys": ["order_number"], "scd_type": 2, "exclude_from_hash": ["last_update_ts", "file_path", "_ingested_at", "_run_id"]},
-    {"source_table": "sales", "target_table": "sales", "primary_keys": ["order_number"], "scd_type": 1, "exclude_from_hash": ["last_update_ts", "file_path", "_ingested_at", "_run_id"]},
-    {"source_table": "customers", "target_table": "customers", "primary_keys": ["customer_id"], "scd_type": 2, "exclude_from_hash": ["last_update_ts", "file_path", "_ingested_at", "_run_id"]}
-  ]
-}

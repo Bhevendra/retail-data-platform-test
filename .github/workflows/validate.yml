@@ -1,23 +1,58 @@
-name: Validate retail data platform
+name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  unit-and-bundle-validation:
+  lint-and-unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - run: pip install -r requirements-dev.txt
-      - run: pytest -q
-      # Authentication is supplied by the deployment environment, never repository secrets.
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests (local Spark, no workspace needed)
+        run: pytest
+      - name: Data dictionary is up to date
+        run: |
+          python -m retail_platform.gold
+          git diff --exit-code docs/data-dictionary.md
+
+  bundle-validate:
+    runs-on: ubuntu-latest
+    needs: lint-and-unit-tests
+    steps:
+      - uses: actions/checkout@v4
       - uses: databricks/setup-cli@main
-      - run: databricks bundle validate -t dev
+      - name: Validate bundle (dev)
+        run: databricks bundle validate -t dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+  # Deploys happen from main only, via the bundle; production requires an environment approval.
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: bundle-validate
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle deploy -t dev
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
