@@ -75,3 +75,9 @@ and a PII classification field are all defined in configuration.
 They are treated only as source-system references. Their embedded credentials
 must be rotated and stored in a secret manager; this project never contains
 those credentials.
+
+## Manual Serverless execution
+
+The Cosmos notebook installs `pymongo` with `%pip` and uses the Python MongoDB
+client, so it can run on Serverless compute without uploading a JVM Spark
+connector JAR. Run all notebook cells once after pulling the latest changes.

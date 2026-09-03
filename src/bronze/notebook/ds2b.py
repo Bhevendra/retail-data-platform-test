@@ -25,6 +25,7 @@ dbutils.widgets.text("config_path", "src/bronze/config/bronze.json")
 dbutils.widgets.text("environment", "dev")
 dbutils.widgets.text("catalog", "retaildataplatform")
 dbutils.widgets.text("secret_scope", "retail-platform-dev")
+dbutils.widgets.text("run_date", date.today().isoformat())
 
 config = load_config(dbutils.widgets.get("config_path"))
 catalog = dbutils.widgets.get("catalog") or config["platform"]["catalog"]
@@ -36,7 +37,7 @@ run_id = str(uuid.uuid4())
 volume_path = f"/Volumes/{catalog}/{schema}/{platform['raw_volume']}"
 
 for source in config["sources"]:
-    source_df, raw_path = read_landed_raw(spark, source, volume_path, date.today().isoformat())
+    source_df, raw_path = read_landed_raw(spark, source, volume_path, dbutils.widgets.get("run_date"))
     bronze_df = (source_df
         .withColumn("last_update_ts", F.current_timestamp())
         .withColumn("file_path", F.lit(raw_path))

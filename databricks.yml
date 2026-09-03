@@ -27,7 +27,7 @@ targets:
     mode: development
     default: true
     workspace:
-      host: https://<dev-workspace-url>
+      host: https://dbc-5cf81efb-3cb1.cloud.databricks.com
     variables:
       secret_scope: retail-platform-dev
   prod:

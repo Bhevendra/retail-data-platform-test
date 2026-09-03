@@ -14,9 +14,18 @@ def read_source(spark, dbutils, source: dict, secret_scope: str):
                 .option("password", _secret(dbutils, secret_scope, keys["password"]))
                 .option("driver", "com.microsoft.sqlserver.jdbc.SQLServerDriver").load())
     if source_type == "cosmos_mongodb":
+        # The Python client works on Databricks Serverless; it avoids a cluster-scoped
+        # JVM Mongo Spark connector dependency for this small batch source.
+        from bson import json_util
+        from pymongo import MongoClient
+
         connection = _secret(dbutils, secret_scope, source["secret_keys"]["connection_string"])
-        return (spark.read.format("mongodb").option("connection.uri", connection)
-                .option("database", source["database"]).option("collection", source["collection"]).load())
+        client = MongoClient(connection, serverSelectionTimeoutMS=30_000)
+        documents = list(client[source["database"]][source["collection"]].find({}))
+        if not documents:
+            raise ValueError(f"Cosmos collection is empty: {source['database']}.{source['collection']}")
+        json_rows = [json_util.dumps(document) for document in documents]
+        return spark.read.json(spark.sparkContext.parallelize(json_rows))
     raise ValueError(f"Unsupported source type: {source_type}")
 
 
@@ -37,6 +46,13 @@ def land_raw(spark, dbutils, df, source: dict, volume_path: str, load_date: str)
 def read_landed_raw(spark, source: dict, volume_path: str, load_date: str):
     """Read the source-specific original-format files landed by an ingestion task."""
     path = f"{volume_path}/{source['name']}/load_date={load_date}"
+    hadoop_path = spark._jvm.org.apache.hadoop.fs.Path(path)
+    file_system = hadoop_path.getFileSystem(spark._jsc.hadoopConfiguration())
+    if not file_system.exists(hadoop_path):
+        raise FileNotFoundError(
+            f"Raw landing path is missing: {path}. Run the ingestion task for "
+            f"source '{source['name']}' with run_date={load_date} before DS2B."
+        )
     reader = spark.read.format(source["format"])
     if source["format"] == "csv":
         reader = reader.option("header", "true").option("inferSchema", "true")

@@ -5,6 +5,10 @@
 
 # COMMAND ----------
 
+# MAGIC %pip install pymongo==4.10.1
+
+# COMMAND ----------
+
 import sys
 from datetime import date
 from pathlib import Path
@@ -21,6 +25,7 @@ from common_utils.sources import land_raw, read_source
 dbutils.widgets.text("config_path", "src/bronze/config/bronze.json")
 dbutils.widgets.text("catalog", "retaildataplatform")
 dbutils.widgets.text("secret_scope", "retail-platform-dev")
+dbutils.widgets.text("run_date", date.today().isoformat())
 
 config = load_config(dbutils.widgets.get("config_path"))
 catalog = dbutils.widgets.get("catalog") or config["platform"]["catalog"]
@@ -28,5 +33,5 @@ platform = config["platform"]
 source = next(item for item in config["sources"] if item["type"] == "cosmos_mongodb")
 bootstrap_namespace(spark, catalog, platform["schema"], platform["raw_volume"])
 df = read_source(spark, dbutils, source, dbutils.widgets.get("secret_scope"))
-path = land_raw(spark, dbutils, df, source, f"/Volumes/{catalog}/{platform['schema']}/{platform['raw_volume']}", date.today().isoformat())
+path = land_raw(spark, dbutils, df, source, f"/Volumes/{catalog}/{platform['schema']}/{platform['raw_volume']}", dbutils.widgets.get("run_date"))
 print(f"Cosmos DB landed to {path}")

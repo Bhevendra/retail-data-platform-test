@@ -24,8 +24,8 @@ resources:
               catalog: ${var.catalog}
               secret_scope: ${var.secret_scope}
           libraries:
-            - maven:
-                coordinates: org.mongodb.spark:mongo-spark-connector_2.12:10.4.0
+            - pypi:
+                package: pymongo==4.10.1
         - task_key: ingest_s3
           job_cluster_key: ingestion_cluster
           notebook_task:
