@@ -1,0 +1,8 @@
+.databricks/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.coverage
+dist/
+*.egg-info/
+.env

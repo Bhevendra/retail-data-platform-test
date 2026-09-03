@@ -1,0 +1,54 @@
+resources:
+  jobs:
+    retail_data_platform:
+      name: retail-data-platform-${bundle.target}
+      max_concurrent_runs: 1
+      tags:
+        application: retail-data-platform
+        environment: ${bundle.target}
+        owner: data-engineering
+      job_clusters:
+        - job_cluster_key: ingestion_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 2
+            data_security_mode: USER_ISOLATION
+      tasks:
+        - task_key: ds2b
+          job_cluster_key: ingestion_cluster
+          notebook_task:
+            notebook_path: ../src/bronze/notebook/ds2b.py
+            base_parameters:
+              config_path: src/bronze/config/bronze.json
+              environment: ${bundle.target}
+              catalog: ${var.catalog}
+              secret_scope: ${var.secret_scope}
+          libraries:
+            - maven:
+                coordinates: org.mongodb.spark:mongo-spark-connector_2.12:10.4.0
+            - maven:
+                coordinates: com.microsoft.sqlserver:mssql-jdbc:12.6.1.jre8
+        - task_key: b2s
+          depends_on:
+            - task_key: ds2b
+          job_cluster_key: ingestion_cluster
+          notebook_task:
+            notebook_path: ../src/silver/notebook/b2s.py
+            base_parameters:
+              config_path: src/silver/config/silver.json
+              environment: ${bundle.target}
+              catalog: ${var.catalog}
+        - task_key: s2g
+          depends_on:
+            - task_key: b2s
+          job_cluster_key: ingestion_cluster
+          notebook_task:
+            notebook_path: ../src/gold/notebook/s2g.py
+            base_parameters:
+              config_path: src/gold/config/gold.json
+              environment: ${bundle.target}
+              catalog: ${var.catalog}
+      permissions:
+        - level: CAN_MANAGE_RUN
+          group_name: ${var.service_principal_name}

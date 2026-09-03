@@ -1,0 +1,39 @@
+bundle:
+  name: retail-data-platform
+
+include:
+  - resources/*.yml
+
+sync:
+  include:
+    - src/**
+    - common_utils/**
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for platform data.
+    default: retaildataplatform
+  secret_scope:
+    description: Databricks secret scope containing source credentials.
+  warehouse_id:
+    description: SQL warehouse ID used for SQL tasks when needed.
+    default: ""
+  service_principal_name:
+    description: Principal granted job run privileges.
+    default: account users
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://<dev-workspace-url>
+    variables:
+      secret_scope: retail-platform-dev
+  prod:
+    mode: production
+    workspace:
+      host: https://<prod-workspace-url>
+      root_path: /Workspace/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      secret_scope: retail-platform-prod

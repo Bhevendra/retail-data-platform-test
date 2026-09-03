@@ -1,0 +1,23 @@
+name: Validate retail data platform
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  unit-and-bundle-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+      # Authentication is supplied by the deployment environment, never repository secrets.
+      - uses: databricks/setup-cli@main
+      - run: databricks bundle validate -t dev
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

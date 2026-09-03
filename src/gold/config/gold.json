@@ -1,0 +1,8 @@
+{
+  "platform": {"catalog": "retaildataplatform", "silver_schema": "silver", "gold_schema": "gold", "owner": "data-engineering", "tags": {"domain": "retail", "layer": "gold", "classification": "internal"}},
+  "products": [
+    {"name": "sales_orders_current", "type": "view", "sql": "SELECT * FROM ${catalog}.silver.sales_orders WHERE is_current = true"},
+    {"name": "customers_current", "type": "view", "sql": "SELECT * FROM ${catalog}.silver.customers WHERE is_current = true"},
+    {"name": "sales", "type": "view", "sql": "SELECT * FROM ${catalog}.silver.sales"}
+  ]
+}
