@@ -27,9 +27,20 @@ def read_source(spark, dbutils, source: dict, secret_scope: str):
         documents = list(client[source["database"]][source["collection"]].find({}))
         if not documents:
             raise ValueError(f"Cosmos collection is empty: {source['database']}.{source['collection']}")
-        # SparkContext is unavailable on Serverless compute. Extended JSON makes
-        # ObjectId and other BSON-only values safe for Spark DataFrame inference.
-        json_rows = [json.loads(json_util.dumps(document)) for document in documents]
+        # SparkContext is unavailable on Serverless compute. Serialise all nested
+        # BSON values to JSON strings so inconsistent array/document shapes (for
+        # example ordered_products) do not break Spark schema inference.
+        def serialise_value(value):
+            if isinstance(value, (dict, list)):
+                return json_util.dumps(value)
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+            return str(value)
+
+        json_rows = [
+            {field: serialise_value(value) for field, value in document.items()}
+            for document in documents
+        ]
         return spark.createDataFrame(json_rows)
     raise ValueError(f"Unsupported source type: {source_type}")
 
