@@ -1,6 +1,5 @@
 import json
-import os
-import tempfile
+import io
 from urllib.parse import urlparse
 
 
@@ -76,12 +75,16 @@ def land_s3_object(dbutils, source: dict, secret_scope: str, volume_path: str, l
         aws_secret_access_key=_secret(dbutils, secret_scope, keys["secret_access_key"]),
         region_name=source["region"],
     )
+    # Serverless prevents dbutils.fs from copying from local /tmp. Use the
+    # Workspace Files API to stream the S3 response directly into the volume.
+    from databricks.sdk import WorkspaceClient
+
     target = f"{volume_path}/{source['name']}/load_date={load_date}"
-    filename = os.path.basename(location.path)
-    local_path = os.path.join(tempfile.gettempdir(), filename)
-    client.download_file(location.netloc, location.path.lstrip("/"), local_path)
-    dbutils.fs.mkdirs(target)
-    dbutils.fs.cp(f"file:{local_path}", f"{target}/{filename}")
+    filename = location.path.rsplit("/", 1)[-1]
+    workspace = WorkspaceClient()
+    workspace.files.create_directory(target)
+    body = client.get_object(Bucket=location.netloc, Key=location.path.lstrip("/"))["Body"].read()
+    workspace.files.upload(f"{target}/{filename}", io.BytesIO(body), overwrite=True)
     return target
 
 

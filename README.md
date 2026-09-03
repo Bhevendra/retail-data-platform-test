@@ -81,3 +81,7 @@ those credentials.
 The Cosmos notebook installs `pymongo` with `%pip` and uses the Python MongoDB
 client, so it can run on Serverless compute without uploading a JVM Spark
 connector JAR. Run all notebook cells once after pulling the latest changes.
+
+The S3 notebook uses the Databricks Workspace Files API to stream source files
+into the volume. This avoids the Serverless restriction on copying local `/tmp`
+files into Unity Catalog volumes.
