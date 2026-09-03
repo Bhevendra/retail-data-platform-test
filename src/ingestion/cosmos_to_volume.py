@@ -9,6 +9,11 @@
 
 # COMMAND ----------
 
+# MAGIC %load_ext autoreload
+# MAGIC %autoreload 2
+
+# COMMAND ----------
+
 import sys
 from datetime import date
 from pathlib import Path
