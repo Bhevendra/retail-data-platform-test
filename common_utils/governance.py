@@ -25,6 +25,14 @@ DEFAULT_TABLE_PROPERTIES = {
 }
 
 
+def _best_effort(spark, statement: str, **ctx) -> None:
+    """Run governance DDL that some runtimes reject; never fail a load over metadata."""
+    try:
+        spark.sql(statement)
+    except Exception as exc:  # noqa: BLE001
+        log(get_logger(), "governance statement not applied", level=30, error=str(exc).splitlines()[0][:200], **ctx)
+
+
 def _sql_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
 
@@ -69,8 +77,8 @@ def apply_comments(spark, catalog: str, schema: str, table: str, table_comment: 
         if column not in existing:
             log(get_logger(), "column comment skipped: column not found", level=30, table=table, column=column)
             continue
-        if is_view:
-            spark.sql(f"ALTER VIEW {target} ALTER COLUMN `{column}` COMMENT '{_sql_string(comment)}'")
+        if is_view:  # ALTER VIEW ... ALTER COLUMN is not accepted by every runtime; COMMENT ON COLUMN is.
+            _best_effort(spark, f"COMMENT ON COLUMN {target}.`{column}` IS '{_sql_string(comment)}'", table=table, column=column, what="view column comment")
         else:
             spark.sql(f"ALTER TABLE {target} ALTER COLUMN `{column}` COMMENT '{_sql_string(comment)}'")
 
@@ -89,8 +97,13 @@ def tag_pii_columns(spark, catalog: str, schema: str, table: str, columns: list[
     target = qualified(catalog, schema, table)
     existing = {f.name for f in spark.table(target).schema.fields}
     for column in columns:
-        if column in existing:
-            spark.sql(f"ALTER {'VIEW' if is_view else 'TABLE'} {target} ALTER COLUMN `{column}` SET TAGS ('classification' = '{classification}')")
+        if column not in existing:
+            continue
+        statement = f"ALTER {'VIEW' if is_view else 'TABLE'} {target} ALTER COLUMN `{column}` SET TAGS ('classification' = '{classification}')"
+        if is_view:  # column tags on views are not supported on all runtimes; the underlying tables carry the tags
+            _best_effort(spark, statement, table=table, column=column, what="view column tag")
+        else:
+            spark.sql(statement)
 
 
 def set_owner(spark, catalog: str, schema: str, table: str, owner: str | None, is_view: bool = False) -> None:
