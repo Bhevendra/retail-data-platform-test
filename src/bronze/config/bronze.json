@@ -44,6 +44,7 @@
       "database": "batch2",
       "table": "retail.customers",
       "secret_keys": {"username": "sqlserver-username", "password": "sqlserver-password"},
+      "jdbc_options": {"trustServerCertificate": "true", "loginTimeout": "90"},
       "format": "csv",
       "target_table": "customers",
       "primary_keys": ["customer_id"],

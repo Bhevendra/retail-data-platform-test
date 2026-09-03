@@ -13,7 +13,11 @@ def read_source(spark, dbutils, source: dict, secret_scope: str):
         return spark.read.format(source["format"]).load(source["path"])
     if source_type == "sqlserver":
         keys = source["secret_keys"]
-        url = f"jdbc:sqlserver://{source['host']}:{source.get('port', 1433)};databaseName={source['database']};encrypt=true;trustServerCertificate=false"
+        # Extra driver properties (for example trustServerCertificate, loginTimeout)
+        # are declared per source in configuration; encryption is always on.
+        jdbc_options = {"encrypt": "true", **source.get("jdbc_options", {})}
+        properties = ";".join(f"{key}={value}" for key, value in jdbc_options.items())
+        url = f"jdbc:sqlserver://{source['host']}:{source.get('port', 1433)};databaseName={source['database']};{properties}"
         return (spark.read.format("jdbc").option("url", url).option("dbtable", source["table"])
                 .option("user", _secret(dbutils, secret_scope, keys["username"]))
                 .option("password", _secret(dbutils, secret_scope, keys["password"]))

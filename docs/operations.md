@@ -15,6 +15,15 @@ The current S3 ingestion uses the scoped AWS keys to copy the original source
 object into the raw volume. In production, replace these with a Unity Catalog
 storage credential/external location and an IAM role with read-only access.
 
+## SQL Server JDBC options
+
+`jdbc_options` on the SQL Server source in `bronze.json` are appended to the
+JDBC URL. The dev configuration sets `trustServerCertificate=true` and
+`loginTimeout=90` because the Serverless JDBC driver fails certificate
+validation/handshake against Azure SQL with the defaults. Encryption stays on.
+For production, prefer `trustServerCertificate=false` with
+`hostNameInCertificate=*.database.windows.net` once verified.
+
 ## Production controls
 
 * Use a dedicated service principal to deploy and run the job; do not use a
