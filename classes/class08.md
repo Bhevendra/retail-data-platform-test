@@ -98,7 +98,7 @@ Collect on one slide; this is the contract for Silver:
 | 4 | customers/orders | epoch seconds | cast to timestamp |
 | 5 | customers | `LAST, FIRST` names | derive type/first/last |
 | 6 | orders | duplicate order_number = versions | latest `_id` wins, SCD2 |
-| 7 | orders | nested JSON, string numbers | `from_json` with explicit schema, cast in Gold |
+| 7 | orders | nested JSON, string numbers | `from_json` with explicit schema; lines and clicks become their own Silver tables (Class 9b) |
 | 8 | sales | no key | `sha2` of row as `sale_id` |
 | 9 | sales | broken JSON | `regexp_extract` |
 | 10 | sales | exact duplicates | dedupe via key hash |

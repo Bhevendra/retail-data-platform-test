@@ -16,7 +16,7 @@
     {
       "source_table": "sales_orders",
       "target_table": "sales_orders",
-      "description": "E-commerce orders from the web shop (Cosmos DB), one row per order version. The source re-emits an order when line items are added, so the same order_number can appear more than once in an extract; the latest document (by Cosmos _id) wins and earlier states are kept as history (SCD2). Nested line items, promotions and click-stream are parsed into typed arrays.",
+      "description": "Web-shop order headers (Cosmos DB), one row per order version (SCD2). The source re-emits an order when line items are added, so the same order_number can appear more than once in an extract; the latest document (by Cosmos _id) wins and earlier states are kept as history. Line items and click-stream live in silver.sales_order_lines and silver.sales_order_clicks; promotions are attributes of the line.",
       "primary_keys": [
         "order_number"
       ],
@@ -46,10 +46,15 @@
           "order_date": "CAST(CAST(order_datetime AS TIMESTAMP) AS DATE)",
           "line_item_count": "size(ordered_products)",
           "has_promotion": "size(promo_info) > 0",
-          "order_gross_amount": "CAST(aggregate(ordered_products, CAST(0 AS DOUBLE), (acc, p) -> acc + CAST(p.price AS DOUBLE) * CAST(p.qty AS DOUBLE)) AS DECIMAL(14,2))"
+          "order_gross_amount": "CAST(aggregate(ordered_products, CAST(0 AS DOUBLE), (acc, p) -> acc + CAST(p.price AS DOUBLE) * CAST(p.qty AS DOUBLE)) AS DECIMAL(14,2))",
+          "click_count": "CAST(aggregate(clicked_items, 0L, (acc, x) -> acc + CAST(x[1] AS BIGINT)) AS BIGINT)",
+          "clicked_item_count": "size(clicked_items)"
         },
         "drop": [
-          "order_datetime"
+          "order_datetime",
+          "ordered_products",
+          "clicked_items",
+          "promo_info"
         ]
       },
       "cluster_by": [
@@ -64,11 +69,10 @@
         "line_item_count": "Actual number of entries in ordered_products.",
         "order_ts": "Order timestamp (UTC), derived from the source epoch seconds. NULL for a small share of orders.",
         "order_date": "Order date (UTC).",
-        "ordered_products": "Line items: product id, name, unit price, quantity, unit and optional promotion (discount rate applies to the line).",
-        "clicked_items": "Click-stream pairs [product_id, click_count] captured before checkout.",
-        "promo_info": "Promotions applied at order level (mirrors the line-level promotion_info).",
         "has_promotion": "TRUE when at least one promotion was applied.",
-        "order_gross_amount": "Sum of price x quantity over ordered_products, before discounts."
+        "order_gross_amount": "Sum of price x quantity over ordered_products, before discounts.",
+        "click_count": "Total product clicks recorded before checkout.",
+        "clicked_item_count": "Distinct products clicked before checkout."
       },
       "quality_rules": [
         {
@@ -91,16 +95,198 @@
           "description": "About 1% of source orders have no timestamp; they are kept but excluded from date joins."
         },
         {
+          "name": "line_count_consistent",
+          "type": "expression",
+          "expression": "number_of_line_items = line_item_count",
+          "severity": "warn"
+        },
+        {
           "name": "line_items_parsed",
           "type": "expression",
           "expression": "line_item_count > 0",
           "severity": "error",
-          "description": "ordered_products must parse into at least one line."
+          "description": "ordered_products must contain at least one line."
+        }
+      ]
+    },
+    {
+      "source_table": "sales_orders",
+      "target_table": "sales_order_lines",
+      "description": "Web-shop order lines, one row per order_number x line_number for the latest version of each order (SCD1: lines are only ever added upstream). Flattened from the ordered_products array; the promotion applied to the line is carried as attributes (promo_item always equals the line's product).",
+      "primary_keys": [
+        "order_number",
+        "line_number"
+      ],
+      "scd_type": 1,
+      "order_by": "source_document_id",
+      "transformations": {
+        "rename": {
+          "_id": "source_document_id"
+        },
+        "cast": {
+          "order_number": "bigint",
+          "customer_id": "bigint",
+          "order_datetime": "bigint"
+        },
+        "parse_json": {
+          "ordered_products": "array<struct<curr:string,id:string,name:string,price:string,qty:string,unit:string,promotion_info:struct<promo_disc:double,promo_id:string,promo_item:string,promo_qty:string>>>"
+        },
+        "explode": {
+          "column": "ordered_products",
+          "alias": "p",
+          "position_column": "line_number"
+        },
+        "derived": {
+          "order_ts": "CAST(order_datetime AS TIMESTAMP)",
+          "order_date": "CAST(CAST(order_datetime AS TIMESTAMP) AS DATE)",
+          "product_id": "p.id",
+          "product_name": "p.name",
+          "quantity": "try_cast(p.qty AS INT)",
+          "unit_price": "try_cast(p.price AS DECIMAL(12,2))",
+          "currency": "p.curr",
+          "unit": "p.unit",
+          "promo_id": "coalesce(p.promotion_info.promo_id, 'NONE')",
+          "promo_discount_rate": "coalesce(p.promotion_info.promo_disc, 0)",
+          "promo_quantity": "try_cast(p.promotion_info.promo_qty AS INT)",
+          "gross_amount": "CAST(try_cast(p.qty AS INT) * try_cast(p.price AS DECIMAL(12,2)) AS DECIMAL(14,2))",
+          "discount_amount": "CAST(try_cast(p.qty AS INT) * try_cast(p.price AS DECIMAL(12,2)) * coalesce(p.promotion_info.promo_disc, 0) AS DECIMAL(14,2))",
+          "net_amount": "CAST(try_cast(p.qty AS INT) * try_cast(p.price AS DECIMAL(12,2)) * (1 - coalesce(p.promotion_info.promo_disc, 0)) AS DECIMAL(14,2))"
+        },
+        "drop": [
+          "order_datetime",
+          "customer_name",
+          "number_of_line_items",
+          "clicked_items",
+          "promo_info"
+        ]
+      },
+      "cluster_by": [
+        "order_number"
+      ],
+      "column_comments": {
+        "order_number": "Order business key; joins silver.sales_orders.",
+        "line_number": "1-based position of the line within the order.",
+        "source_document_id": "Cosmos document the line was taken from (latest version of the order).",
+        "customer_id": "Customer business key.",
+        "order_ts": "Order timestamp (UTC).",
+        "order_date": "Order date (UTC).",
+        "product_id": "Catalogue product id.",
+        "product_name": "Product name as ordered.",
+        "quantity": "Units ordered.",
+        "unit_price": "Unit price before discount.",
+        "currency": "Currency of the amounts.",
+        "unit": "Unit of measure (pcs).",
+        "promo_id": "Promotion applied to the line; NONE when no promotion. Joins gold.dim_promotion.",
+        "promo_discount_rate": "Discount rate applied to the line (0 when none).",
+        "promo_quantity": "Quantity the promotion applied to, per the source.",
+        "gross_amount": "quantity x unit_price.",
+        "discount_amount": "gross_amount x promo_discount_rate.",
+        "net_amount": "gross_amount - discount_amount. Use this for revenue."
+      },
+      "quality_rules": [
+        {
+          "name": "line_key_not_null",
+          "type": "expression",
+          "expression": "order_number IS NOT NULL AND line_number IS NOT NULL",
+          "severity": "error"
         },
         {
-          "name": "line_count_consistent",
+          "name": "product_id_not_null",
+          "type": "not_null",
+          "column": "product_id",
+          "severity": "error"
+        },
+        {
+          "name": "quantity_positive",
+          "type": "range",
+          "column": "quantity",
+          "min": 1,
+          "severity": "error"
+        },
+        {
+          "name": "unit_price_positive",
+          "type": "range",
+          "column": "unit_price",
+          "min": 0.01,
+          "severity": "error"
+        },
+        {
+          "name": "discount_rate_in_range",
+          "type": "range",
+          "column": "promo_discount_rate",
+          "min": 0,
+          "max": 1,
+          "severity": "error"
+        },
+        {
+          "name": "promo_applies_to_line",
           "type": "expression",
-          "expression": "number_of_line_items = line_item_count",
+          "expression": "promo_id = 'NONE' OR promo_quantity IS NOT NULL",
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "source_table": "sales_orders",
+      "target_table": "sales_order_clicks",
+      "description": "Products a customer clicked before checking out, one row per order_number x product_id, from the clicked_items click-stream (SCD1).",
+      "primary_keys": [
+        "order_number",
+        "product_id"
+      ],
+      "scd_type": 1,
+      "order_by": "source_document_id",
+      "transformations": {
+        "rename": {
+          "_id": "source_document_id"
+        },
+        "cast": {
+          "order_number": "bigint",
+          "customer_id": "bigint"
+        },
+        "parse_json": {
+          "clicked_items": "array<array<string>>"
+        },
+        "explode": {
+          "column": "clicked_items",
+          "alias": "c",
+          "position_column": "click_rank"
+        },
+        "derived": {
+          "product_id": "c[0]",
+          "click_count": "try_cast(c[1] AS INT)"
+        },
+        "drop": [
+          "order_datetime",
+          "customer_name",
+          "number_of_line_items",
+          "ordered_products",
+          "promo_info"
+        ]
+      },
+      "cluster_by": [
+        "order_number"
+      ],
+      "column_comments": {
+        "order_number": "Order business key.",
+        "product_id": "Clicked product id (may not have been ordered).",
+        "click_count": "Number of clicks on the product before checkout.",
+        "click_rank": "Position in the click list.",
+        "customer_id": "Customer business key.",
+        "source_document_id": "Cosmos document the row was taken from."
+      },
+      "quality_rules": [
+        {
+          "name": "click_key_not_null",
+          "type": "expression",
+          "expression": "order_number IS NOT NULL AND product_id IS NOT NULL",
+          "severity": "error"
+        },
+        {
+          "name": "click_count_positive",
+          "type": "range",
+          "column": "click_count",
+          "min": 0,
           "severity": "warn"
         }
       ]

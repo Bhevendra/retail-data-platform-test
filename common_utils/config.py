@@ -207,11 +207,32 @@ class BronzeConfig:
 # Silver
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
+class Explode:
+    """Turn one row with an array column into one row per element (nested data -> its own table)."""
+
+    column: str
+    alias: str = "element"
+    position_column: str | None = None  # 1-based position of the element within the array
+    keep_array: bool = False
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> Explode:
+        _require(bool(raw.get("column")), "transformations.explode needs 'column'")
+        alias = raw.get("alias", "element")
+        _identifier(alias, "transformations.explode.alias")
+        position = raw.get("position_column")
+        if position:
+            _identifier(position, "transformations.explode.position_column")
+        return cls(column=raw["column"], alias=alias, position_column=position, keep_array=bool(raw.get("keep_array", False)))
+
+
+@dataclass(frozen=True)
 class Transformations:
     rename: dict[str, str] = field(default_factory=dict)
     cast: dict[str, str] = field(default_factory=dict)
     trim: list[str] = field(default_factory=list)
     parse_json: dict[str, str] = field(default_factory=dict)  # column -> DDL schema
+    explode: Explode | None = None  # runs after parse_json, before derived
     derived: dict[str, str] = field(default_factory=dict)  # column -> SQL expression
     drop: list[str] = field(default_factory=list)
     null_literals: list[str] = field(default_factory=lambda: ["", "NULL", "null", "N/A"])
@@ -224,6 +245,7 @@ class Transformations:
             cast=dict(raw.get("cast", {})),
             trim=list(raw.get("trim", [])),
             parse_json=dict(raw.get("parse_json", {})),
+            explode=Explode.from_dict(raw["explode"]) if raw.get("explode") else None,
             derived=dict(raw.get("derived", {})),
             drop=list(raw.get("drop", [])),
             null_literals=list(raw.get("null_literals", ["", "NULL", "null", "N/A"])),

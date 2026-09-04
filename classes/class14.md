@@ -4,7 +4,7 @@
 
 * Generate `dim_date` from a date range with `sequence` + `explode`.
 * Build `dim_customer` from Silver SCD2 with a surrogate key and an Unknown member.
-* Build `dim_product` from two channels: explode `ordered_products`, union with POS, derive brand with fallbacks.
+* Build `dim_product` from two channels: `silver.sales_order_lines` union POS, derive brand with fallbacks; build `dim_promotion` from the line promotions.
 * Write each as a Delta table with an overwrite (full rebuild).
 
 ## Time plan (100 min)
@@ -87,17 +87,14 @@ SELECT count(*), count(DISTINCT customer_sk), sum(CASE WHEN is_current THEN 1 EN
 There is no product master, so the dimension is *derived*. Build the query in stages,
 each as its own cell with a `display`:
 
-Stage 1 — products from web orders (explode):
+Stage 1 — products from web orders (already flattened in Class 9b):
 
 ```sql
-SELECT p.id AS product_id, p.name AS product_name
-FROM retaildataplatform.silver.sales_orders
-LATERAL VIEW explode(ordered_products) t AS p
-WHERE is_current = true
+SELECT product_id, product_name FROM retaildataplatform.silver.sales_order_lines
 ```
 
-`LATERAL VIEW explode` turns one row with an array of 3 products into 3 rows. Show the
-count before and after.
+Point out what Class 9b bought us: no `LATERAL VIEW` here, and the same table feeds
+the fact tomorrow.
 
 Stage 2 — products from POS (`silver.sales`) with brand.
 
@@ -115,6 +112,16 @@ students compare with their stage-by-stage version. Check brand coverage:
 ```sql
 SELECT brand, brand_source, count(*) FROM retaildataplatform.gold.dim_product GROUP BY 1, 2 ORDER BY 1;
 ```
+
+## `dim_promotion` (5 min)
+
+```sql
+SELECT promo_id, max(promo_discount_rate) AS discount_rate, count(*) AS lines_applied
+FROM retaildataplatform.silver.sales_order_lines GROUP BY promo_id;
+```
+
+Four rows: `NONE`, `0`, `1`, `2`. Add a `promotion_name` label; `NONE` is the Unknown
+member for lines without a promotion. Paste the product from `gold.json`.
 
 ## Homework
 

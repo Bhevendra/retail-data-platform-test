@@ -2,8 +2,8 @@
 
 ## Objectives
 
-* Combine `apply_transformations`, `row_hash`, `deduplicate` and the two merges into one `prepare` + `load_entity` flow.
-* Drive it from `silver.json` for all three entities with a `for` loop.
+* Combine `apply_transformations` (incl. the `explode` step from Class 9b), `row_hash`, `deduplicate` and the two merges into one `prepare` + `load_entity` flow.
+* Drive it from `silver.json` for all five entities (three headers/masters + two flattened child tables) with a `for` loop.
 * Process only the Bronze rows of the current `run_date`.
 * Attach lineage columns and understand which columns are excluded from the hash.
 
@@ -91,7 +91,7 @@ for entity in config["entities"]:
     print("rows processed:", rows)
 ```
 
-Checkpoints: `silver.customers` 28,670 current rows; `silver.sales_orders` 4,000; `silver.sales` 352. Run again — `DESCRIBE HISTORY` shows merges with zero changes.
+Checkpoints: `silver.customers` 28,670 current rows; `silver.sales_orders` 4,000; `silver.sales_order_lines` 7,997; `silver.sales_order_clicks` ~15,600; `silver.sales` 352. Run again — `DESCRIBE HISTORY` shows merges with zero changes.
 
 Compare with `src/silver/b2s.ipynb`: same loop; extras are the `entities` widget for
 subset runs, `detect_deletes` widget, quality rules, governance, `track_entity`, and the

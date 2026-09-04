@@ -31,6 +31,7 @@ return_date, reason`. Deliver it through every layer:
 
 * Look at `Source.from_dict` for the required keys of your source type.
 * `sale_id`-style hash keys are fine when the source has no id.
+* If the feed has nested arrays with their own grain, use the `explode` transformation (Class 9b) to give them a Silver table.
 * A fact that references an order needs the order's customer: join `silver.sales_orders` (current) in the Gold SQL.
 * `depends_on` must list `fact_sales_order_line` if you join it.
 * Run `pytest -q` before every deploy; the contract tests will name what you forgot.

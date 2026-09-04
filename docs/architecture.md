@@ -19,7 +19,7 @@
 | --- | --- | --- | --- | --- |
 | Raw | `bronze.raw_data/<source>/load_date=<d>` | overwrite folder | file per extract | replay, audit |
 | Bronze | `bronze.<entity>` (+`_quarantine`) | `replaceWhere _load_date` | source key + `_load_date` | engineering |
-| Silver | `silver.<entity>` | SCD1 / SCD2 `MERGE` on `_row_hash` | business key (+ `effective_from`) | engineering, advanced analysts |
+| Silver | `silver.<entity>` (headers, flattened child tables such as `sales_order_lines`, `sales_order_clicks`) | SCD1 / SCD2 `MERGE` on `_row_hash` | business key (+ `effective_from`) | engineering, advanced analysts |
 | Gold | `gold.dim_*`, `gold.fact_*` | full rebuild | surrogate keys, PK/FK | BI, AI, business |
 | Gold | `gold.*_current`, `gold.*_obt`, `gold.mv_*` | views | – | BI, Genie, notebooks |
 | Ops | `ops.pipeline_runs`, `ops.data_quality_results` | append | `run_id` | on-call, freshness |
@@ -47,6 +47,14 @@ land_sqlserver ┘
   (row-level rules move failing rows to `<entity>_quarantine` with `_failed_rules`),
   `warn`.
 * Results are appended to `ops.data_quality_results` for trend dashboards and alerts.
+
+## Nested data: flatten in Silver
+
+A nested array that has its own grain (order lines, click-stream) becomes its own Silver
+table via the `explode` transformation (`silver.json`), keyed by parent key + position.
+Silver stays queryable without `LATERAL VIEW`, quality rules apply per element, and Gold
+facts become plain joins. Arrays that are attributes of a row (a line's promotion) stay
+attributes. See ADR 0005.
 
 ## Slowly changing dimensions
 

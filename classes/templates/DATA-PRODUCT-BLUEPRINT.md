@@ -1,6 +1,6 @@
-# Data Engineering Project Template
+# Data Product Blueprint
 
-> Copy this file to `docs/project-charter.md` (or `classes/class00-requirements.md` for
+> Copy this file to `docs/blueprint.md` (or `classes/class00-blueprint.md` for
 > the bootcamp) and fill it in **with** the stakeholders, not for them. Sections are
 > numbered in the order they are usually discovered, not the order they are finished.
 

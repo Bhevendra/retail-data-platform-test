@@ -151,3 +151,17 @@ def test_tolerant_cast_accepts_float_formatted_integers_and_nulls_bad_values(spa
     t = Transformations.from_dict({"cast": {"a": "bigint", "b": "int", "c": "bigint", "d": "int", "e": "bigint"}, "null_literals": []})
     row = apply_transformations(df, t).first()
     assert (row["a"], row["b"], row["c"], row["d"], row["e"]) == (1564627663, 46506, 12, None, None)
+
+
+def test_explode_flattens_arrays_into_child_rows(spark):
+    df = spark.createDataFrame([(1, '[{"id":"A","qty":"2"},{"id":"B","qty":"5"}]'), (2, "[]")], "order_number int, items string")
+    t = Transformations.from_dict(
+        {
+            "parse_json": {"items": "array<struct<id:string,qty:string>>"},
+            "explode": {"column": "items", "alias": "p", "position_column": "line_number"},
+            "derived": {"product_id": "p.id", "quantity": "try_cast(p.qty AS INT)"},
+        }
+    )
+    rows = sorted((r["order_number"], r["line_number"], r["product_id"], r["quantity"]) for r in apply_transformations(df, t).collect())
+    assert rows == [(1, 1, "A", 2), (1, 2, "B", 5)], "one row per element, 1-based position, empty arrays produce no rows"
+    assert "p" not in apply_transformations(df, t).columns and "items" not in apply_transformations(df, t).columns

@@ -2,7 +2,7 @@
 
 ## Objectives
 
-* Build `fact_sales_order_line` with `posexplode`, surrogate-key lookups and derived measures.
+* Build `fact_sales_order_line` from `silver.sales_order_lines` with surrogate-key lookups (no explode needed since Class 9b).
 * Build `fact_sales_order` and `fact_pos_sale`; write reconciliation queries.
 * Create the one-big-table views.
 * Turn the SQL into config products and build them in dependency order (`s2g` v1).
@@ -21,49 +21,38 @@
 
 ## `fact_sales_order_line` (30 min)
 
-Stage 1 — lines with position:
-
-```sql
-SELECT o.order_number, o.customer_id, o.order_ts, o.order_date, pos + 1 AS line_number,
-       p.id AS product_id, CAST(p.qty AS INT) AS quantity, CAST(p.price AS DECIMAL(12,2)) AS unit_price,
-       p.curr AS currency, p.promotion_info.promo_id AS promo_id,
-       coalesce(p.promotion_info.promo_disc, 0) AS promo_discount_rate
-FROM retaildataplatform.silver.sales_orders o
-LATERAL VIEW posexplode(o.ordered_products) t AS pos, p
-WHERE o.is_current = true
-```
-
-`posexplode` = explode plus the index; `pos + 1` gives a human line number. Dot access
-into a struct (`p.promotion_info.promo_disc`) is new — show `p` alone first.
-
-Stage 2 — keys and measures (wrap stage 1 in a CTE `lines`):
+Because Class 9b flattened the lines, the fact is a projection of
+`silver.sales_order_lines` plus key lookups — no explode:
 
 ```sql
 SELECT concat_ws('-', CAST(l.order_number AS STRING), CAST(l.line_number AS STRING)) AS order_line_id,
        l.order_number, l.line_number,
        coalesce(c.customer_sk, -1) AS customer_sk,
        coalesce(pr.product_sk, -1) AS product_sk,
+       l.promo_id,
        CAST(date_format(l.order_date, 'yyyyMMdd') AS INT) AS order_date_key,
        l.order_ts, l.order_date, l.customer_id, l.product_id, l.quantity, l.unit_price, l.currency,
-       CAST(l.quantity * l.unit_price AS DECIMAL(14,2)) AS gross_amount,
-       l.promo_id, l.promo_discount_rate,
-       CAST(l.quantity * l.unit_price * l.promo_discount_rate AS DECIMAL(14,2)) AS discount_amount,
-       CAST(l.quantity * l.unit_price * (1 - l.promo_discount_rate) AS DECIMAL(14,2)) AS net_amount
-FROM lines l
+       l.gross_amount, l.promo_discount_rate, l.discount_amount, l.net_amount
+FROM retaildataplatform.silver.sales_order_lines l
 LEFT JOIN retaildataplatform.gold.dim_customer c ON c.customer_id = l.customer_id AND c.is_current = true
 LEFT JOIN retaildataplatform.gold.dim_product pr ON pr.product_id = l.product_id
 ```
 
-Why `LEFT JOIN` + `coalesce(-1)`: an inner join would silently drop revenue for unknown
-customers. Count `customer_sk = -1` afterwards and discuss what to tell the CRM team.
-`order_date_key` stays NULL for the 1% of orders without a timestamp — a documented
-caveat, not a bug.
+Teaching points: the measures (`gross_amount`, `discount_amount`, `net_amount`) were
+computed once in Silver and are *reused*, not recomputed; `LEFT JOIN` + `coalesce(-1)`
+keeps revenue for unknown customers (an inner join would silently drop it — count
+`customer_sk = -1` afterwards and discuss what to tell the CRM team); `promo_id` is a
+foreign key to `dim_promotion` with `NONE` as its Unknown member; `order_date_key`
+stays NULL for the 1% of orders without a timestamp — a documented caveat, not a bug.
+
+Show the class the *old* version of this query (with `LATERAL VIEW posexplode`) from
+git history and ask which one they would rather maintain.
 
 ## Headers and POS (15 min)
 
-`fact_sales_order` aggregates the lines per `order_number` and adds click-stream
-counts (`size(clicked_items)`, `aggregate(clicked_items, 0L, (acc, x) -> acc + CAST(x[1] AS BIGINT))` —
-explain the lambda as "a for loop written inside SQL"). `fact_pos_sale` is a
+`fact_sales_order` aggregates the lines per `order_number` and takes the click-stream
+counts already derived on the Silver header (`clicked_item_count`, `click_count` — the
+`aggregate(...)` lambda in `silver.json` is "a for loop written inside SQL"). `fact_pos_sale` is a
 straight projection of `silver.sales` with the same key lookups. Paste both from
 `gold.json` and read them line by line.
 
@@ -93,6 +82,7 @@ SELECT f.order_line_id, f.order_number, f.order_date, d.year_month, d.day_name, 
 FROM retaildataplatform.gold.fact_sales_order_line f
 JOIN retaildataplatform.gold.dim_customer c ON c.customer_sk = f.customer_sk
 JOIN retaildataplatform.gold.dim_product p ON p.product_sk = f.product_sk
+JOIN retaildataplatform.gold.dim_promotion pm ON pm.promo_id = f.promo_id
 LEFT JOIN retaildataplatform.gold.dim_date d ON d.date_key = f.order_date_key;
 ```
 

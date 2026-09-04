@@ -1,7 +1,7 @@
-# Class 0 — The project charter (template filled in for the Retail Data Platform)
+# Class 0 — The Data Product Blueprint (filled in for the Retail Data Platform)
 
 Teach before Class 1. Two artefacts: the blank framework
-(`classes/templates/DE-PROJECT-TEMPLATE.md`) and this file, the same framework filled
+(`classes/templates/DATA-PRODUCT-BLUEPRINT.md`) and this file, the same framework filled
 in for our project. Walk the template first (why each section exists, what its gate
 means), then fill this one in *with* the class section by section.
 
@@ -217,7 +217,9 @@ Status: agreed before Gold build (Class 13)
 | Product | product_id | SCD1 (derived) | 1 → many order lines / POS sales |
 | Date | date | static | 1 → many facts |
 | Order | order_number | SCD2 in Silver; current in Gold | 1 → many order lines |
-| Order line | order_number + line_number | rebuilt | many → 1 customer, product, date |
+| Order line | order_number + line_number | SCD1 (`silver.sales_order_lines`) | many → 1 customer, product, promotion, date |
+| Order click | order_number + product_id | SCD1 (`silver.sales_order_clicks`) | many → 1 order |
+| Promotion | promo_id | derived | 1 → many order lines |
 | POS sale | sale_id (hash) | SCD1 | many → 1 customer, product, date |
 
 ## 12. Target design — Gold 🟧
@@ -229,7 +231,8 @@ Status: agreed before build; metric views added when AI needs were confirmed
 | dim_date | dim | day | date_key | calendar attributes |
 | dim_customer | dim (SCD2) | customer version | customer_sk PK; customer_id | name, type, geography, loyalty, is_active, is_current; Unknown = −1 |
 | dim_product | dim | product | product_sk PK; product_id | name, brand, brand_source; Unknown = −1 |
-| fact_sales_order_line | fact | order × line | order_line_id PK; FKs customer_sk, product_sk, order_date_key | quantity, unit_price, gross, discount, net |
+| dim_promotion | dim | promotion code | promo_id PK (NONE member) | promotion_name, discount_rate |
+| fact_sales_order_line | fact | order × line | order_line_id PK; FKs customer_sk, product_sk, promo_id, order_date_key | quantity, unit_price, gross, discount, net |
 | fact_sales_order | fact | order | order_number PK; FKs customer_sk, order_date_key | lines, units, amounts, clicks, has_promotion |
 | fact_pos_sale | fact | product sold | sale_id PK; FKs | quantity, unit_price, total_amount |
 | customers_current, *_obt | views | — | — | current state; one-big-table |

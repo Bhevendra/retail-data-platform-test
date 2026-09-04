@@ -99,7 +99,7 @@
       "name": "dim_product",
       "type": "table",
       "description": "Product dimension built from every product seen in web orders and point-of-sale transactions (there is no product master upstream). Brand comes from the POS export when available, otherwise from the brand name found in the product name. Row product_sk = -1 is the 'Unknown' member.",
-      "sql": "WITH order_products AS (SELECT p.id AS product_id, p.name AS product_name FROM ${catalog}.${silver}.sales_orders LATERAL VIEW explode(ordered_products) t AS p WHERE is_current = true), pos_products AS (SELECT product_id, product_name, brand FROM ${catalog}.${silver}.sales WHERE product_id IS NOT NULL AND product_id <> ''), brands AS (SELECT DISTINCT brand FROM pos_products WHERE brand IS NOT NULL), all_products AS (SELECT product_id, max(product_name) AS product_name, count(*) AS times_sold FROM (SELECT product_id, product_name FROM order_products UNION ALL SELECT product_id, product_name FROM pos_products) GROUP BY product_id) SELECT xxhash64(ap.product_id) AS product_sk, ap.product_id, ap.product_name, coalesce(max(pp.brand), max(b.brand), nullif(regexp_extract(ap.product_name, '^([A-Za-z]{3,})', 1), ''), 'Unknown') AS brand, CASE WHEN max(pp.brand) IS NOT NULL THEN 'pos_export' WHEN max(b.brand) IS NOT NULL THEN 'name_match' WHEN regexp_extract(ap.product_name, '^([A-Za-z]{3,})', 1) <> '' THEN 'name_prefix' ELSE 'unknown' END AS brand_source, max(ap.times_sold) AS times_sold FROM all_products ap LEFT JOIN pos_products pp ON pp.product_id = ap.product_id LEFT JOIN brands b ON ap.product_name ILIKE concat('%', b.brand, '%') GROUP BY ap.product_id, ap.product_name UNION ALL SELECT -1, NULL, 'Unknown', 'Unknown', 'unknown', 0",
+      "sql": "WITH order_products AS (SELECT product_id, product_name FROM ${catalog}.${silver}.sales_order_lines), pos_products AS (SELECT product_id, product_name, brand FROM ${catalog}.${silver}.sales WHERE product_id IS NOT NULL AND product_id <> ''), brands AS (SELECT DISTINCT brand FROM pos_products WHERE brand IS NOT NULL), all_products AS (SELECT product_id, max(product_name) AS product_name, count(*) AS times_sold FROM (SELECT product_id, product_name FROM order_products UNION ALL SELECT product_id, product_name FROM pos_products) GROUP BY product_id) SELECT xxhash64(ap.product_id) AS product_sk, ap.product_id, ap.product_name, coalesce(max(pp.brand), max(b.brand), nullif(regexp_extract(ap.product_name, '^([A-Za-z]{3,})', 1), ''), 'Unknown') AS brand, CASE WHEN max(pp.brand) IS NOT NULL THEN 'pos_export' WHEN max(b.brand) IS NOT NULL THEN 'name_match' WHEN regexp_extract(ap.product_name, '^([A-Za-z]{3,})', 1) <> '' THEN 'name_prefix' ELSE 'unknown' END AS brand_source, max(ap.times_sold) AS times_sold FROM all_products ap LEFT JOIN pos_products pp ON pp.product_id = ap.product_id LEFT JOIN brands b ON ap.product_name ILIKE concat('%', b.brand, '%') GROUP BY ap.product_id, ap.product_name UNION ALL SELECT -1, NULL, 'Unknown', 'Unknown', 'unknown', 0",
       "primary_key": [
         "product_sk"
       ],
@@ -116,10 +116,28 @@
       }
     },
     {
+      "name": "dim_promotion",
+      "type": "table",
+      "description": "Promotion dimension derived from the promotions seen on order lines (no promotion master upstream). promo_id 'NONE' is the member for lines without a promotion.",
+      "sql": "SELECT promo_id, CASE WHEN promo_id = 'NONE' THEN 'No promotion' ELSE concat('Promotion ', promo_id, ' (', CAST(round(max(promo_discount_rate) * 100) AS INT), '% off)') END AS promotion_name, max(promo_discount_rate) AS discount_rate, count(*) AS lines_applied FROM ${catalog}.${silver}.sales_order_lines GROUP BY promo_id UNION ALL SELECT 'NONE', 'No promotion', 0.0, 0 WHERE NOT EXISTS (SELECT 1 FROM ${catalog}.${silver}.sales_order_lines WHERE promo_id = 'NONE')",
+      "primary_key": [
+        "promo_id"
+      ],
+      "cluster_by": [
+        "promo_id"
+      ],
+      "column_comments": {
+        "promo_id": "Promotion code from the web shop; NONE = no promotion.",
+        "promotion_name": "Human-readable label with the discount percentage.",
+        "discount_rate": "Discount rate applied by the promotion.",
+        "lines_applied": "Order lines the promotion was applied to (helper)."
+      }
+    },
+    {
       "name": "fact_sales_order_line",
       "type": "table",
-      "description": "Web-shop order lines. Grain: one row per order_number x line_number for the current version of each order. Amounts are in `currency` (USD). net_amount applies the line's promotion discount.",
-      "sql": "WITH lines AS (SELECT o.order_number, o.customer_id, o.order_ts, o.order_date, pos + 1 AS line_number, p.id AS product_id, CAST(p.qty AS INT) AS quantity, CAST(p.price AS DECIMAL(12,2)) AS unit_price, p.curr AS currency, p.promotion_info.promo_id AS promo_id, coalesce(p.promotion_info.promo_disc, 0) AS promo_discount_rate FROM ${catalog}.${silver}.sales_orders o LATERAL VIEW posexplode(o.ordered_products) t AS pos, p WHERE o.is_current = true) SELECT concat_ws('-', CAST(l.order_number AS STRING), CAST(l.line_number AS STRING)) AS order_line_id, l.order_number, l.line_number, coalesce(c.customer_sk, -1) AS customer_sk, coalesce(pr.product_sk, -1) AS product_sk, CAST(date_format(l.order_date, 'yyyyMMdd') AS INT) AS order_date_key, l.order_ts, l.order_date, l.customer_id, l.product_id, l.quantity, l.unit_price, l.currency, CAST(l.quantity * l.unit_price AS DECIMAL(14,2)) AS gross_amount, l.promo_id, l.promo_discount_rate, CAST(l.quantity * l.unit_price * l.promo_discount_rate AS DECIMAL(14,2)) AS discount_amount, CAST(l.quantity * l.unit_price * (1 - l.promo_discount_rate) AS DECIMAL(14,2)) AS net_amount FROM lines l LEFT JOIN ${catalog}.${gold}.dim_customer c ON c.customer_id = l.customer_id AND c.is_current = true LEFT JOIN ${catalog}.${gold}.dim_product pr ON pr.product_id = l.product_id",
+      "description": "Web-shop order lines. Grain: one row per order_number x line_number for the current version of each order. Amounts are in `currency` (USD). net_amount applies the line's promotion discount. Source: silver.sales_order_lines.",
+      "sql": "SELECT concat_ws('-', CAST(l.order_number AS STRING), CAST(l.line_number AS STRING)) AS order_line_id, l.order_number, l.line_number, coalesce(c.customer_sk, -1) AS customer_sk, coalesce(pr.product_sk, -1) AS product_sk, l.promo_id, CAST(date_format(l.order_date, 'yyyyMMdd') AS INT) AS order_date_key, l.order_ts, l.order_date, l.customer_id, l.product_id, l.quantity, l.unit_price, l.currency, l.gross_amount, l.promo_discount_rate, l.discount_amount, l.net_amount FROM ${catalog}.${silver}.sales_order_lines l LEFT JOIN ${catalog}.${gold}.dim_customer c ON c.customer_id = l.customer_id AND c.is_current = true LEFT JOIN ${catalog}.${gold}.dim_product pr ON pr.product_id = l.product_id",
       "primary_key": [
         "order_line_id"
       ],
@@ -140,6 +158,15 @@
           "references": "dim_product",
           "referenced_columns": [
             "product_sk"
+          ]
+        },
+        {
+          "columns": [
+            "promo_id"
+          ],
+          "references": "dim_promotion",
+          "referenced_columns": [
+            "promo_id"
           ]
         },
         {
@@ -171,7 +198,7 @@
         "unit_price": "Unit price before discount.",
         "currency": "Currency of the amounts.",
         "gross_amount": "quantity x unit_price.",
-        "promo_id": "Promotion id applied to the line, if any.",
+        "promo_id": "FK to dim_promotion; NONE when no promotion.",
         "promo_discount_rate": "Discount rate applied to the line (0 when none).",
         "discount_amount": "gross_amount x promo_discount_rate.",
         "net_amount": "gross_amount - discount_amount. Use this for revenue."
@@ -202,7 +229,7 @@
       "name": "fact_sales_order",
       "type": "table",
       "description": "Web-shop order headers. Grain: one row per order_number (current version). Aggregates of fact_sales_order_line plus click-stream and promotion flags.",
-      "sql": "SELECT o.order_number, coalesce(c.customer_sk, -1) AS customer_sk, CAST(date_format(o.order_date, 'yyyyMMdd') AS INT) AS order_date_key, o.order_ts, o.order_date, o.customer_id, o.line_item_count, coalesce(l.units, 0) AS units, coalesce(l.gross_amount, 0) AS gross_amount, coalesce(l.discount_amount, 0) AS discount_amount, coalesce(l.net_amount, 0) AS net_amount, o.has_promotion, size(o.clicked_items) AS clicked_item_count, CAST(aggregate(o.clicked_items, 0L, (acc, x) -> acc + CAST(x[1] AS BIGINT)) AS BIGINT) AS click_count, o.effective_from AS version_effective_from FROM ${catalog}.${silver}.sales_orders o LEFT JOIN (SELECT order_number, sum(quantity) AS units, sum(gross_amount) AS gross_amount, sum(discount_amount) AS discount_amount, sum(net_amount) AS net_amount FROM ${catalog}.${gold}.fact_sales_order_line GROUP BY order_number) l ON l.order_number = o.order_number LEFT JOIN ${catalog}.${gold}.dim_customer c ON c.customer_id = o.customer_id AND c.is_current = true WHERE o.is_current = true",
+      "sql": "SELECT o.order_number, coalesce(c.customer_sk, -1) AS customer_sk, CAST(date_format(o.order_date, 'yyyyMMdd') AS INT) AS order_date_key, o.order_ts, o.order_date, o.customer_id, o.line_item_count, coalesce(l.units, 0) AS units, coalesce(l.gross_amount, 0) AS gross_amount, coalesce(l.discount_amount, 0) AS discount_amount, coalesce(l.net_amount, 0) AS net_amount, o.has_promotion, o.clicked_item_count, o.click_count, o.effective_from AS version_effective_from FROM ${catalog}.${silver}.sales_orders o LEFT JOIN (SELECT order_number, sum(quantity) AS units, sum(gross_amount) AS gross_amount, sum(discount_amount) AS discount_amount, sum(net_amount) AS net_amount FROM ${catalog}.${gold}.fact_sales_order_line GROUP BY order_number) l ON l.order_number = o.order_number LEFT JOIN ${catalog}.${gold}.dim_customer c ON c.customer_id = o.customer_id AND c.is_current = true WHERE o.is_current = true",
       "primary_key": [
         "order_number"
       ],
@@ -346,11 +373,12 @@
       "name": "sales_order_lines_obt",
       "type": "view",
       "description": "One-big-table view: web-shop order lines joined to customer, product and date. Best starting point for ad-hoc analysis, notebooks and Genie.",
-      "sql": "SELECT f.order_line_id, f.order_number, f.line_number, f.order_ts, f.order_date, d.year, d.year_quarter, d.year_month, d.month_name, d.day_name, d.is_weekend, c.customer_id, c.customer_name, c.customer_type, c.state, c.city, c.loyalty_segment_name, c.is_active AS customer_is_active, p.product_id, p.product_name, p.brand, f.quantity, f.unit_price, f.currency, f.gross_amount, f.promo_id, f.promo_discount_rate, f.discount_amount, f.net_amount FROM ${catalog}.${gold}.fact_sales_order_line f JOIN ${catalog}.${gold}.dim_customer c ON c.customer_sk = f.customer_sk JOIN ${catalog}.${gold}.dim_product p ON p.product_sk = f.product_sk LEFT JOIN ${catalog}.${gold}.dim_date d ON d.date_key = f.order_date_key",
+      "sql": "SELECT f.order_line_id, f.order_number, f.line_number, f.order_ts, f.order_date, d.year, d.year_quarter, d.year_month, d.month_name, d.day_name, d.is_weekend, c.customer_id, c.customer_name, c.customer_type, c.state, c.city, c.loyalty_segment_name, c.is_active AS customer_is_active, p.product_id, p.product_name, p.brand, pm.promo_id, pm.promotion_name, f.quantity, f.unit_price, f.currency, f.gross_amount, f.promo_discount_rate, f.discount_amount, f.net_amount FROM ${catalog}.${gold}.fact_sales_order_line f JOIN ${catalog}.${gold}.dim_customer c ON c.customer_sk = f.customer_sk JOIN ${catalog}.${gold}.dim_product p ON p.product_sk = f.product_sk JOIN ${catalog}.${gold}.dim_promotion pm ON pm.promo_id = f.promo_id LEFT JOIN ${catalog}.${gold}.dim_date d ON d.date_key = f.order_date_key",
       "depends_on": [
         "fact_sales_order_line",
         "dim_customer",
         "dim_product",
+        "dim_promotion",
         "dim_date"
       ],
       "pii_columns": [
@@ -385,9 +413,10 @@
         "fact_sales_order_line",
         "dim_customer",
         "dim_product",
+        "dim_promotion",
         "dim_date"
       ],
-      "yaml": "version: 0.1\nsource: ${catalog}.${gold}.fact_sales_order_line\njoins:\n  - name: customer\n    source: ${catalog}.${gold}.dim_customer\n    on: source.customer_sk = customer.customer_sk\n  - name: product\n    source: ${catalog}.${gold}.dim_product\n    on: source.product_sk = product.product_sk\n  - name: calendar\n    source: ${catalog}.${gold}.dim_date\n    on: source.order_date_key = calendar.date_key\ndimensions:\n  - name: order_date\n    expr: source.order_date\n  - name: year_month\n    expr: calendar.year_month\n  - name: year_quarter\n    expr: calendar.year_quarter\n  - name: brand\n    expr: product.brand\n  - name: product_name\n    expr: product.product_name\n  - name: customer_state\n    expr: customer.state\n  - name: customer_type\n    expr: customer.customer_type\n  - name: loyalty_segment\n    expr: customer.loyalty_segment_name\n  - name: promo_id\n    expr: source.promo_id\nmeasures:\n  - name: net_revenue\n    expr: SUM(source.net_amount)\n  - name: gross_revenue\n    expr: SUM(source.gross_amount)\n  - name: discount_amount\n    expr: SUM(source.discount_amount)\n  - name: units\n    expr: SUM(source.quantity)\n  - name: orders\n    expr: COUNT(DISTINCT source.order_number)\n  - name: order_lines\n    expr: COUNT(1)\n  - name: customers\n    expr: COUNT(DISTINCT source.customer_id)\n  - name: average_order_value\n    expr: SUM(source.net_amount) / COUNT(DISTINCT source.order_number)\n  - name: discount_rate\n    expr: SUM(source.discount_amount) / SUM(source.gross_amount)\n"
+      "yaml": "version: 0.1\nsource: ${catalog}.${gold}.fact_sales_order_line\njoins:\n  - name: customer\n    source: ${catalog}.${gold}.dim_customer\n    on: source.customer_sk = customer.customer_sk\n  - name: product\n    source: ${catalog}.${gold}.dim_product\n    on: source.product_sk = product.product_sk\n  - name: promotion\n    source: ${catalog}.${gold}.dim_promotion\n    on: source.promo_id = promotion.promo_id\n  - name: calendar\n    source: ${catalog}.${gold}.dim_date\n    on: source.order_date_key = calendar.date_key\ndimensions:\n  - name: order_date\n    expr: source.order_date\n  - name: year_month\n    expr: calendar.year_month\n  - name: year_quarter\n    expr: calendar.year_quarter\n  - name: brand\n    expr: product.brand\n  - name: product_name\n    expr: product.product_name\n  - name: customer_state\n    expr: customer.state\n  - name: customer_type\n    expr: customer.customer_type\n  - name: loyalty_segment\n    expr: customer.loyalty_segment_name\n  - name: promo_id\n    expr: source.promo_id\n  - name: promotion_name\n    expr: promotion.promotion_name\nmeasures:\n  - name: net_revenue\n    expr: SUM(source.net_amount)\n  - name: gross_revenue\n    expr: SUM(source.gross_amount)\n  - name: discount_amount\n    expr: SUM(source.discount_amount)\n  - name: units\n    expr: SUM(source.quantity)\n  - name: orders\n    expr: COUNT(DISTINCT source.order_number)\n  - name: order_lines\n    expr: COUNT(1)\n  - name: customers\n    expr: COUNT(DISTINCT source.customer_id)\n  - name: average_order_value\n    expr: SUM(source.net_amount) / COUNT(DISTINCT source.order_number)\n  - name: discount_rate\n    expr: SUM(source.discount_amount) / SUM(source.gross_amount)\n"
     },
     {
       "name": "mv_pos_sales",

@@ -110,7 +110,7 @@ silver_customers = apply_transformations(spark.table("retaildataplatform.bronze.
 `t.get("trim", [])` — "give me this key, or an empty list if it is missing" — so every
 section is optional. `df.drop(*list)` — the `*` unpacks a list into arguments.
 
-Exercise (10 min): write the `sales_orders` dictionary: `rename` `_id`→`source_document_id`,
+Exercise (10 min): write the `sales_orders` *header* dictionary (the arrays become their own tables in Class 9b): `rename` `_id`→`source_document_id`,
 casts, `parse_json` for the three JSON columns (schema strings from Class 8 homework),
 derived `order_ts`, `order_date`, `line_item_count`, `has_promotion`, drop `order_datetime`.
 

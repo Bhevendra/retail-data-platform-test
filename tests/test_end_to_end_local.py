@@ -64,8 +64,19 @@ def test_silver_transformations_on_fixtures(spark, star):
     assert orders.count() == 8, "re-emitted order version collapses to one row per order_number"
     latest = orders.filter("order_number = 317568001").first()
     assert latest["number_of_line_items"] == 3 and latest["source_document_id"].endswith("9" * 22), "latest Cosmos document wins"
-    assert orders.schema["ordered_products"].dataType.simpleString().startswith("array<struct<curr:string,id:string")
+    assert "ordered_products" not in orders.columns, "nested arrays are flattened into child tables, not kept on the header"
     assert orders.filter("order_ts IS NULL").count() == 1 and orders.filter("has_promotion").count() >= 1
+
+    lines = spark.table("spark_catalog.silver.sales_order_lines")
+    assert lines.count() == orders.agg(F.sum("line_item_count")).first()[0], "one line row per element of ordered_products"
+    assert lines.groupBy("order_number", "line_number").count().filter("count > 1").count() == 0
+    assert lines.filter("order_number = 317568001").count() == latest["line_item_count"], "lines come from the latest version of a re-emitted order"
+    assert lines.filter("order_number = 317568001").select("source_document_id").distinct().first()[0].endswith("9" * 22)
+    assert lines.filter("promo_id <> 'NONE'").count() > 0 and lines.filter("discount_amount > net_amount").count() == 0
+    silver_recon = lines.groupBy("order_number").agg(F.sum("gross_amount").alias("g")).join(orders, "order_number").filter("g <> order_gross_amount").count()
+    assert silver_recon == 0, "line gross reconciles with the header gross at Silver"
+    clicks = spark.table("spark_catalog.silver.sales_order_clicks")
+    assert clicks.count() > 0 and clicks.groupBy("order_number", "product_id").count().filter("count > 1").count() == 0
 
     sales = spark.table("spark_catalog.silver.sales")
     assert sales.count() == 6, "exact duplicate POS row collapses"
@@ -111,6 +122,9 @@ def test_gold_unknown_members_and_reconciliation(spark, star):
     silver_gross = spark.table("spark_catalog.silver.sales_orders").agg(F.sum("order_gross_amount")).first()[0]
     fact_gross = lines.agg(F.sum("gross_amount")).first()[0]
     assert line_total == header_total and silver_gross == fact_gross
+
+    promotions = {r["promo_id"]: r["promotion_name"] for r in spark.table("spark_catalog.gold.dim_promotion").collect()}
+    assert promotions["NONE"] == "No promotion" and any("% off" in name for name in promotions.values())
 
     products = spark.table("spark_catalog.gold.dim_product")
     by_id = {r["product_id"]: (r["brand"], r["brand_source"]) for r in products.collect()}

@@ -11,7 +11,8 @@ are engineering layers and may change shape; Gold is the contract.
  dim_customer ──┐                      │
  (SCD2, -1 = Unknown)                  ▼
                 ├──> fact_sales_order_line  (web shop, grain: order x line)   ──> mv_web_sales
-                ├──> fact_sales_order       (web shop, grain: order)
+ dim_promotion ─┤        ▲
+ (NONE = none)  ├──> fact_sales_order       (web shop, grain: order)
  dim_product ───┤
  (-1 = Unknown) └──> fact_pos_sale          (stores, grain: product sold)     ──> mv_pos_sales
 
@@ -67,6 +68,9 @@ WHERE EXISTS (SELECT 1 FROM retaildataplatform.gold.fact_pos_sale s WHERE s.cust
   excluded from date-based charts but included in totals.
 * A web order can be re-emitted by the source when lines are added; Gold shows the
   latest version, Silver keeps the earlier states (`is_current = false`).
+* Nested order data is flattened in Silver: `silver.sales_order_lines` (one row per
+  line, with the promotion as attributes) and `silver.sales_order_clicks` (click-stream).
+  Analysts who need line detail without the star can query those directly.
 * The POS export has no transaction id; `sale_id` is a hash of the row, so identical
   duplicate rows in the export are counted once.
 * Product brand is derived (see `dim_product.brand_source`); there is no product master.

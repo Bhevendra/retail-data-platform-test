@@ -39,7 +39,7 @@ resources/jobs.yml   databricks.yml   tests/   docs/   .github/workflows/validat
 | # | Class | What students can do afterwards |
 | --- | --- | --- |
 | **Phase 0 — Orientation** | | |
-| 0 | [The project charter: template + filled example](class00-requirements.md) | Use the reusable [DE project template](templates/DE-PROJECT-TEMPLATE.md) (23 sections, three gates); fill it with stakeholders; know the minimum needed to start (source details, access, classification) |
+| 0 | [The Data Product Blueprint: template + filled example](class00-blueprint.md) | Use the reusable [Data Product Blueprint template](templates/DATA-PRODUCT-BLUEPRINT.md) (23 sections, three gates); fill it with stakeholders; know the minimum needed to start (source details, access, classification) |
 | 1 | [The project, the platform, the plan](class01.md) | Explain medallion layers, navigate Databricks Free Edition, create catalog/schema/volume, run a parameterised notebook |
 | **Phase 1 — Ingestion (raw layer)** | | |
 | 2 | [SQL Server → volume (hard-coded)](class02.md) | Read a JDBC table, write CSV into a volume, explain "land raw first" |
@@ -52,6 +52,7 @@ resources/jobs.yml   databricks.yml   tests/   docs/   .github/workflows/validat
 | **Phase 3 — Silver** | | |
 | 8 | [Data profiling workshop](class08.md) | Find duplicates, broken JSON, epoch timestamps, NULL literals; write a findings list |
 | 9 | [Transformations driven by config](class09.md) | rename/cast/parse_json/derived as a loop over a dictionary; tolerant casts |
+| 9b | [Nested data: when an array deserves its own table](class09b-nested-data-to-tables.md) | Decide by grain; `explode` step; build `sales_order_lines` / `sales_order_clicks`; reconcile lines against headers |
 | 10 | [SCD theory + SCD Type 1 with MERGE](class10.md) | Explain SCD1/2, write MERGE, hash rows for change detection |
 | 11 | [SCD Type 2 implementation](class11.md) | effective_from/to, is_current, delete detection, de-duplication with window functions |
 | 12 | [Assembling the Silver notebook](class12.md) | Config-driven `b2s` for all three entities |

@@ -55,14 +55,15 @@ Groups of three, 12 minutes, then compare with the reference:
 | `dim_date` | one row per day | `date_key` | year, quarter, month, week, weekend… |
 | `dim_customer` | one row per customer version | `customer_sk` (PK), `customer_id` | name, type, geography, loyalty, `is_current` |
 | `dim_product` | one row per product | `product_sk` (PK), `product_id` | name, brand, brand_source |
+| `dim_promotion` | one row per promotion code | `promo_id` (PK, `NONE` member) | promotion_name, discount_rate |
 | `fact_sales_order_line` | one row per order × line | `order_line_id` (PK), FKs to the three dims | quantity, unit_price, gross, discount, net |
 | `fact_sales_order` | one row per order | `order_number` (PK) | line count, units, amounts, clicks, has_promotion |
 | `fact_pos_sale` | one row per product sold in store | `sale_id` (PK) | quantity, unit_price, total_amount |
 
 Discussion points that always come up: "why not one fact for web and store?" (different
-grain and no shared id → separate facts, shared dimensions); "where is dim_promotion?"
-(promo id and rate live on the line as a degenerate dimension; three values do not
-justify a table — but it would be the first thing to add if promotions grew).
+grain and no shared id → separate facts, shared dimensions); "do three promotion codes justify a dimension?" (yes, a small one: BI users slice by
+promotion *name*, and the `NONE` member keeps the join inner-safe; the rate also stays
+on the line for arithmetic).
 
 ## Grain statements and reconciliation (15 min)
 

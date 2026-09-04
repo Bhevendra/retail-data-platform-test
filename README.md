@@ -15,10 +15,10 @@ deploys with **Databricks Asset Bundles**.
  bronze.<entity>         ── audit columns, quality rules, quarantine, idempotent per load date
      │                                                  b2s
      ▼
- silver.<entity>         ── typed, renamed, de-duplicated, SCD1 / SCD2 history, CDF on
+ silver.<entity>         ── typed, renamed, de-duplicated, nested arrays flattened into child tables, SCD1 / SCD2 history
      │                                                  s2g
      ▼
- gold.dim_date, dim_customer, dim_product            ── conformed dimensions (PK, comments, Unknown members)
+ gold.dim_date, dim_customer, dim_product, dim_promotion ── conformed dimensions (PK, comments, Unknown members)
  gold.fact_sales_order_line, fact_sales_order, fact_pos_sale ── facts with FKs, declared grain, reconciled measures
  gold.customers_current, *_obt views                  ── current-state and one-big-table views for AI / Genie
  gold.mv_web_sales, mv_pos_sales                     ── metric views: governed measures (semantic layer)

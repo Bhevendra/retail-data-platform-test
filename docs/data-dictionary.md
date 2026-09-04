@@ -78,13 +78,27 @@ Primary key: `product_sk`
 | `brand_source` | How brand was determined: pos_export, name_match, name_prefix or unknown. |
 | `times_sold` | Number of order lines / POS rows the product appeared in (helper for sorting). |
 
+### `retaildataplatform.gold.dim_promotion` (table)
+
+Promotion dimension derived from the promotions seen on order lines (no promotion master upstream). promo_id 'NONE' is the member for lines without a promotion.
+
+Primary key: `promo_id`
+
+| Column | Description |
+| --- | --- |
+| `promo_id` | Promotion code from the web shop; NONE = no promotion. |
+| `promotion_name` | Human-readable label with the discount percentage. |
+| `discount_rate` | Discount rate applied by the promotion. |
+| `lines_applied` | Order lines the promotion was applied to (helper). |
+
 ### `retaildataplatform.gold.fact_sales_order_line` (table)
 
-Web-shop order lines. Grain: one row per order_number x line_number for the current version of each order. Amounts are in `currency` (USD). net_amount applies the line's promotion discount.
+Web-shop order lines. Grain: one row per order_number x line_number for the current version of each order. Amounts are in `currency` (USD). net_amount applies the line's promotion discount. Source: silver.sales_order_lines.
 
 Primary key: `order_line_id`
 Foreign key: `customer_sk` -> `dim_customer(customer_sk)`
 Foreign key: `product_sk` -> `dim_product(product_sk)`
+Foreign key: `promo_id` -> `dim_promotion(promo_id)`
 Foreign key: `order_date_key` -> `dim_date(date_key)`
 
 | Column | Description |
@@ -103,7 +117,7 @@ Foreign key: `order_date_key` -> `dim_date(date_key)`
 | `unit_price` | Unit price before discount. |
 | `currency` | Currency of the amounts. |
 | `gross_amount` | quantity x unit_price. |
-| `promo_id` | Promotion id applied to the line, if any. |
+| `promo_id` | FK to dim_promotion; NONE when no promotion. |
 | `promo_discount_rate` | Discount rate applied to the line (0 when none). |
 | `discount_amount` | gross_amount x promo_discount_rate. |
 | `net_amount` | gross_amount - discount_amount. Use this for revenue. |
@@ -192,7 +206,7 @@ Governed point-of-sale metrics (revenue, units, transactions) by date, customer 
 
 ### `retaildataplatform.silver.sales_orders` (SCD type 2, key `order_number`)
 
-E-commerce orders from the web shop (Cosmos DB), one row per order version. The source re-emits an order when line items are added, so the same order_number can appear more than once in an extract; the latest document (by Cosmos _id) wins and earlier states are kept as history (SCD2). Nested line items, promotions and click-stream are parsed into typed arrays.
+Web-shop order headers (Cosmos DB), one row per order version (SCD2). The source re-emits an order when line items are added, so the same order_number can appear more than once in an extract; the latest document (by Cosmos _id) wins and earlier states are kept as history. Line items and click-stream live in silver.sales_order_lines and silver.sales_order_clicks; promotions are attributes of the line.
 
 | Column | Description |
 | --- | --- |
@@ -204,11 +218,48 @@ E-commerce orders from the web shop (Cosmos DB), one row per order version. The 
 | `line_item_count` | Actual number of entries in ordered_products. |
 | `order_ts` | Order timestamp (UTC), derived from the source epoch seconds. NULL for a small share of orders. |
 | `order_date` | Order date (UTC). |
-| `ordered_products` | Line items: product id, name, unit price, quantity, unit and optional promotion (discount rate applies to the line). |
-| `clicked_items` | Click-stream pairs [product_id, click_count] captured before checkout. |
-| `promo_info` | Promotions applied at order level (mirrors the line-level promotion_info). |
 | `has_promotion` | TRUE when at least one promotion was applied. |
 | `order_gross_amount` | Sum of price x quantity over ordered_products, before discounts. |
+| `click_count` | Total product clicks recorded before checkout. |
+| `clicked_item_count` | Distinct products clicked before checkout. |
+
+### `retaildataplatform.silver.sales_order_lines` (SCD type 1, key `order_number, line_number`)
+
+Web-shop order lines, one row per order_number x line_number for the latest version of each order (SCD1: lines are only ever added upstream). Flattened from the ordered_products array; the promotion applied to the line is carried as attributes (promo_item always equals the line's product).
+
+| Column | Description |
+| --- | --- |
+| `order_number` | Order business key; joins silver.sales_orders. |
+| `line_number` | 1-based position of the line within the order. |
+| `source_document_id` | Cosmos document the line was taken from (latest version of the order). |
+| `customer_id` | Customer business key. |
+| `order_ts` | Order timestamp (UTC). |
+| `order_date` | Order date (UTC). |
+| `product_id` | Catalogue product id. |
+| `product_name` | Product name as ordered. |
+| `quantity` | Units ordered. |
+| `unit_price` | Unit price before discount. |
+| `currency` | Currency of the amounts. |
+| `unit` | Unit of measure (pcs). |
+| `promo_id` | Promotion applied to the line; NONE when no promotion. Joins gold.dim_promotion. |
+| `promo_discount_rate` | Discount rate applied to the line (0 when none). |
+| `promo_quantity` | Quantity the promotion applied to, per the source. |
+| `gross_amount` | quantity x unit_price. |
+| `discount_amount` | gross_amount x promo_discount_rate. |
+| `net_amount` | gross_amount - discount_amount. Use this for revenue. |
+
+### `retaildataplatform.silver.sales_order_clicks` (SCD type 1, key `order_number, product_id`)
+
+Products a customer clicked before checking out, one row per order_number x product_id, from the clicked_items click-stream (SCD1).
+
+| Column | Description |
+| --- | --- |
+| `order_number` | Order business key. |
+| `product_id` | Clicked product id (may not have been ordered). |
+| `click_count` | Number of clicks on the product before checkout. |
+| `click_rank` | Position in the click list. |
+| `customer_id` | Customer business key. |
+| `source_document_id` | Cosmos document the row was taken from. |
 
 ### `retaildataplatform.silver.sales` (SCD type 1, key `sale_id`)
 

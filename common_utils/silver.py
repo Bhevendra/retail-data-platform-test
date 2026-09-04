@@ -32,7 +32,10 @@ class SilverLoadResult:
 
 
 def apply_transformations(df: DataFrame, t: Transformations) -> DataFrame:
-    """Pure function: apply configured shaping in a fixed, documented order."""
+    """Pure function: apply configured shaping in a fixed, documented order.
+
+    null literals -> trim -> rename -> cast -> parse_json -> explode -> derived -> filter -> drop.
+    """
     # 1. Normalise null literals in string columns ("NULL", "", "N/A" ...) before casting.
     if t.null_literals:
         for field in df.schema.fields:
@@ -54,14 +57,26 @@ def apply_transformations(df: DataFrame, t: Transformations) -> DataFrame:
     for column, ddl in t.parse_json.items():
         if column in df.columns:
             df = df.withColumn(column, F.from_json(F.col(column), ddl))
-    # 6. Derived columns (SQL expressions can reference renamed/cast/parsed columns).
+    # 6. Explode an array into rows (one child row per element; the element is addressable as <alias>.<field>).
+    if t.explode and t.explode.column in df.columns:
+        e = t.explode
+        if e.position_column:
+            exploded = F.posexplode(F.col(e.column)).alias("__pos", e.alias)
+            df = df.select("*", exploded).withColumn(e.position_column, F.col("__pos") + 1).drop("__pos")
+        else:
+            df = df.select("*", F.explode(F.col(e.column)).alias(e.alias))
+        if not e.keep_array:
+            df = df.drop(e.column)
+    # 7. Derived columns (SQL expressions can reference renamed/cast/parsed/exploded columns).
     for column, expression in t.derived.items():
         df = df.withColumn(column, F.expr(expression))
-    # 7. Filter and drop.
+    # 8. Filter and drop.
     if t.filter:
         df = df.filter(t.filter)
     if t.drop:
         df = df.drop(*[c for c in t.drop if c in df.columns])
+    if t.explode and t.explode.alias in df.columns:
+        df = df.drop(t.explode.alias)  # the struct itself is scaffolding; derived columns carry its fields
     return df
 
 
