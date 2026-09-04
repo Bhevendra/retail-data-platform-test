@@ -39,6 +39,7 @@ resources/jobs.yml   databricks.yml   tests/   docs/   .github/workflows/validat
 | # | Class | What students can do afterwards |
 | --- | --- | --- |
 | **Phase 0 — Orientation** | | |
+| 0 | [The project charter: template + filled example](class00-requirements.md) | Use the reusable [DE project template](templates/DE-PROJECT-TEMPLATE.md) (23 sections, three gates); fill it with stakeholders; know the minimum needed to start (source details, access, classification) |
 | 1 | [The project, the platform, the plan](class01.md) | Explain medallion layers, navigate Databricks Free Edition, create catalog/schema/volume, run a parameterised notebook |
 | **Phase 1 — Ingestion (raw layer)** | | |
 | 2 | [SQL Server → volume (hard-coded)](class02.md) | Read a JDBC table, write CSV into a volume, explain "land raw first" |
