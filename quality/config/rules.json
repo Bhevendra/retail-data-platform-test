@@ -1,0 +1,369 @@
+{
+  "checks": [
+    {
+      "layer": "bronze",
+      "table": "customers",
+      "rules": [
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "customer_name_not_null",
+          "type": "not_null",
+          "column": "customer_name",
+          "severity": "error"
+        },
+        {
+          "name": "extract_not_truncated",
+          "type": "min_row_count",
+          "min": 1000,
+          "severity": "warn",
+          "description": "The full extract is ~29k rows; far fewer suggests a broken export."
+        }
+      ]
+    },
+    {
+      "layer": "bronze",
+      "table": "sales_orders",
+      "rules": [
+        {
+          "name": "order_number_not_null",
+          "type": "not_null",
+          "column": "order_number",
+          "severity": "error"
+        },
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "unique_order_number",
+          "type": "unique",
+          "column": "order_number",
+          "severity": "warn",
+          "description": "Expected to fail: the source re-emits an order when lines are added. Silver keeps the latest version."
+        },
+        {
+          "name": "not_empty",
+          "type": "min_row_count",
+          "min": 1,
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "bronze",
+      "table": "sales",
+      "rules": [
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "product_payload_present",
+          "type": "not_null",
+          "column": "product",
+          "severity": "error"
+        },
+        {
+          "name": "total_price_not_negative",
+          "type": "range",
+          "column": "total_price",
+          "min": 0,
+          "severity": "error"
+        },
+        {
+          "name": "not_empty",
+          "type": "min_row_count",
+          "min": 1,
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "customers",
+      "rules": [
+        {
+          "name": "customer_id_not_null",
+          "type": "not_null",
+          "column": "customer_id",
+          "severity": "error"
+        },
+        {
+          "name": "unique_customer_id",
+          "type": "unique",
+          "column": "customer_id",
+          "severity": "error",
+          "description": "Guaranteed by de-duplication; a failure means the dedupe key is wrong.",
+          "filter": "is_current = true"
+        },
+        {
+          "name": "state_code_format",
+          "type": "regex",
+          "column": "state",
+          "pattern": "^[A-Z]{2}$",
+          "severity": "warn"
+        },
+        {
+          "name": "loyalty_segment_values",
+          "type": "accepted_values",
+          "column": "loyalty_segment",
+          "values": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "severity": "warn"
+        },
+        {
+          "name": "coordinates_in_range",
+          "type": "expression",
+          "expression": "lon BETWEEN -180 AND 180 AND lat BETWEEN -90 AND 90",
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "sales_orders",
+      "rules": [
+        {
+          "name": "order_number_not_null",
+          "type": "not_null",
+          "column": "order_number",
+          "severity": "error"
+        },
+        {
+          "name": "order_ts_present",
+          "type": "not_null",
+          "column": "order_ts",
+          "severity": "warn",
+          "description": "~1% of source orders have no timestamp; kept, but excluded from date-based charts."
+        },
+        {
+          "name": "line_count_consistent",
+          "type": "expression",
+          "expression": "number_of_line_items = line_item_count",
+          "severity": "warn",
+          "description": "The source's own line count sometimes lags the array."
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "sales_order_lines",
+      "rules": [
+        {
+          "name": "line_key_not_null",
+          "type": "expression",
+          "expression": "order_number IS NOT NULL AND line_number IS NOT NULL",
+          "severity": "error"
+        },
+        {
+          "name": "product_id_not_null",
+          "type": "not_null",
+          "column": "product_id",
+          "severity": "error"
+        },
+        {
+          "name": "quantity_positive",
+          "type": "range",
+          "column": "quantity",
+          "min": 1,
+          "severity": "error"
+        },
+        {
+          "name": "unit_price_positive",
+          "type": "range",
+          "column": "unit_price",
+          "min": 0.01,
+          "severity": "error"
+        },
+        {
+          "name": "discount_rate_in_range",
+          "type": "range",
+          "column": "promo_discount_rate",
+          "min": 0,
+          "max": 1,
+          "severity": "error"
+        },
+        {
+          "name": "net_amount_consistent",
+          "type": "expression",
+          "expression": "abs(net_amount - (gross_amount - discount_amount)) < 0.01",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "sales_order_clicks",
+      "rules": [
+        {
+          "name": "click_key_not_null",
+          "type": "expression",
+          "expression": "order_number IS NOT NULL AND product_id IS NOT NULL",
+          "severity": "error"
+        },
+        {
+          "name": "click_count_not_negative",
+          "type": "range",
+          "column": "click_count",
+          "min": 0,
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "sales",
+      "rules": [
+        {
+          "name": "sale_id_not_null",
+          "type": "not_null",
+          "column": "sale_id",
+          "severity": "error"
+        },
+        {
+          "name": "unique_sale_id",
+          "type": "unique",
+          "column": "sale_id",
+          "severity": "error"
+        },
+        {
+          "name": "product_parsed",
+          "type": "expression",
+          "expression": "product_id IS NOT NULL AND product_id <> '' AND unit_price IS NOT NULL AND quantity IS NOT NULL",
+          "severity": "error"
+        },
+        {
+          "name": "amount_reconciles",
+          "type": "expression",
+          "expression": "total_amount = unit_price * quantity",
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "dim_customer",
+      "rules": [
+        {
+          "name": "unique_customer_sk",
+          "type": "unique",
+          "column": "customer_sk",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "dim_product",
+      "rules": [
+        {
+          "name": "unique_product_sk",
+          "type": "unique",
+          "column": "product_sk",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "fact_sales_order_line",
+      "rules": [
+        {
+          "name": "unique_order_line_id",
+          "type": "unique",
+          "column": "order_line_id",
+          "severity": "error"
+        },
+        {
+          "name": "net_amount_not_negative",
+          "type": "range",
+          "column": "net_amount",
+          "min": 0,
+          "severity": "error"
+        },
+        {
+          "name": "customer_resolved",
+          "type": "expression",
+          "expression": "customer_sk <> -1",
+          "severity": "warn",
+          "description": "Orders whose customer is missing from the CRM resolve to the Unknown member."
+        },
+        {
+          "name": "product_resolved",
+          "type": "expression",
+          "expression": "product_sk <> -1",
+          "severity": "warn"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "fact_sales_order",
+      "rules": [
+        {
+          "name": "unique_order_number",
+          "type": "unique",
+          "column": "order_number",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "fact_pos_sale",
+      "rules": [
+        {
+          "name": "unique_sale_id",
+          "type": "unique",
+          "column": "sale_id",
+          "severity": "error"
+        }
+      ]
+    }
+  ],
+  "reconciliations": [
+    {
+      "name": "line_total_equals_header_total",
+      "severity": "error",
+      "description": "Every order line rolls up to its header.",
+      "sql": "SELECT abs((SELECT sum(net_amount) FROM ${catalog}.${gold}.fact_sales_order_line) - (SELECT sum(net_amount) FROM ${catalog}.${gold}.fact_sales_order)) < 0.01 AS passed"
+    },
+    {
+      "name": "gold_gross_equals_silver_gross",
+      "severity": "error",
+      "description": "No revenue is created or lost between Silver and Gold.",
+      "sql": "SELECT abs((SELECT sum(gross_amount) FROM ${catalog}.${gold}.fact_sales_order_line) - (SELECT sum(order_gross_amount) FROM ${catalog}.${silver}.sales_orders WHERE is_current)) < 0.01 AS passed"
+    },
+    {
+      "name": "no_orphan_customer_keys",
+      "severity": "error",
+      "description": "Every fact resolves to a row in dim_customer.",
+      "sql": "SELECT count(*) = 0 AS passed FROM ${catalog}.${gold}.fact_sales_order_line f LEFT ANTI JOIN ${catalog}.${gold}.dim_customer d ON d.customer_sk = f.customer_sk"
+    },
+    {
+      "name": "no_orphan_product_keys",
+      "severity": "error",
+      "description": "Every fact resolves to a row in dim_product.",
+      "sql": "SELECT count(*) = 0 AS passed FROM ${catalog}.${gold}.fact_sales_order_line f LEFT ANTI JOIN ${catalog}.${gold}.dim_product d ON d.product_sk = f.product_sk"
+    },
+    {
+      "name": "no_orphan_promotion_keys",
+      "severity": "error",
+      "description": "Every fact resolves to a row in dim_promotion.",
+      "sql": "SELECT count(*) = 0 AS passed FROM ${catalog}.${gold}.fact_sales_order_line f LEFT ANTI JOIN ${catalog}.${gold}.dim_promotion d ON d.promo_id = f.promo_id"
+    }
+  ]
+}

@@ -1,20 +1,19 @@
-"""Retail data platform library.
+"""Reusable data-engineering helpers — generic, not tied to this project or domain.
 
-Shared, unit-tested building blocks used by the Databricks notebooks:
+Everything here should be useful on *any* Spark/Delta project. Nothing in this
+package knows what a "customer" or a "sales order" is; project-specific logic
+lives in the layer notebooks.
 
-* ``config``        - typed, validated configuration models loaded from JSON
-* ``runtime``       - run context (run id, run date, environment) and structured logging
-* ``sources``       - source readers and raw-volume landing (Serverless-safe)
-* ``bronze``        - idempotent raw -> Bronze loads with audit columns
-* ``quality``       - declarative data-quality rule engine with quarantine support
-* ``scd``           - deterministic SCD type 1 / type 2 merges
-* ``silver``        - Bronze -> Silver standardisation driven by configuration
-* ``gold``          - star-schema builder, semantic (metric) views, data dictionary
-* ``governance``    - Unity Catalog comments, tags, constraints, table properties, grants
-* ``observability`` - run/entity-level operational metrics table
-
-Everything here is compatible with Databricks Serverless compute: no JVM
-bridges (``spark._jvm``), no RDD APIs and no cluster-scoped libraries.
+    logger          JSON-line logging
+    metadata        audit / lineage columns
+    ingestors       read from JDBC, MongoDB/Cosmos, S3, Excel, XML, CSV/JSON/Parquet files
+    writers         idempotent and overwrite writes, table helpers
+    transforms      rename, cast, trim, null literals, parse JSON, explode arrays
+    scd             row hashing, de-duplication, SCD type 1 and type 2 merges
+    quality         declarative data-quality rule engine
+    governance      comments, tags, constraints, table properties, grants
+    observability   per-run / per-entity operational logging
+    settings        tiny config + secret helpers (JSON files, secret scopes)
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"

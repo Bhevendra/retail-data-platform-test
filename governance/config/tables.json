@@ -1,0 +1,441 @@
+{
+  "owner": null,
+  "default_tags": {
+    "domain": "retail",
+    "managed_by": "retail-data-platform"
+  },
+  "grants": {},
+  "audit_column_comments": {
+    "_load_date": "Logical load date of the extract. Re-running a date replaces exactly that date's rows.",
+    "_ingested_at": "UTC timestamp when the row was written to this table.",
+    "_source_file": "Raw file the row was read from (lineage back to the landed bytes).",
+    "_row_hash": "SHA-256 over the business columns; used to detect real changes.",
+    "_updated_at": "UTC timestamp when this row was last written by the pipeline.",
+    "effective_from": "UTC timestamp from which this version is valid.",
+    "effective_to": "UTC timestamp until which this version was valid; 9999-12-31 for the current version.",
+    "is_current": "TRUE for the latest version of the business key."
+  },
+  "tables": [
+    {
+      "schema": "bronze",
+      "name": "customers",
+      "comment": "Raw CRM customer extract, exactly as received, plus audit columns.",
+      "tags": {
+        "layer": "bronze",
+        "classification": "internal",
+        "source_system": "sqlserver_customers"
+      },
+      "pii_columns": [
+        "tax_id",
+        "customer_name",
+        "street",
+        "number",
+        "unit",
+        "ship_to_address",
+        "lon",
+        "lat"
+      ]
+    },
+    {
+      "schema": "bronze",
+      "name": "sales_orders",
+      "comment": "Raw web-shop order documents, nested fields still JSON text.",
+      "tags": {
+        "layer": "bronze",
+        "classification": "internal",
+        "source_system": "cosmos_sales_orders"
+      },
+      "pii_columns": [
+        "customer_name"
+      ],
+      "column_comments": {
+        "ordered_products": "JSON array of line items (parsed in Silver).",
+        "clicked_items": "JSON array of [product_id, click_count] pairs.",
+        "promo_info": "JSON array of promotions applied to the order.",
+        "order_datetime": "Order time as epoch seconds."
+      }
+    },
+    {
+      "schema": "bronze",
+      "name": "sales",
+      "comment": "Raw point-of-sale export, product details still JSON text.",
+      "tags": {
+        "layer": "bronze",
+        "classification": "internal",
+        "source_system": "s3_sales"
+      },
+      "pii_columns": [
+        "customer_name"
+      ],
+      "column_comments": {
+        "product": "JSON payload of the product sold (parsed in Silver).",
+        "total_price": "Line total as exported (= price x qty)."
+      }
+    },
+    {
+      "schema": "silver",
+      "name": "customers",
+      "comment": "Conformed customer master with full change history (SCD2). Filter is_current for the latest version.",
+      "tags": {
+        "layer": "silver",
+        "classification": "internal",
+        "scd_type": "2"
+      },
+      "pii_columns": [
+        "customer_name",
+        "first_name",
+        "last_name",
+        "street",
+        "number",
+        "unit",
+        "ship_to_address",
+        "lon",
+        "lat",
+        "tax_id"
+      ],
+      "column_comments": {
+        "customer_id": "Business key from the CRM.",
+        "customer_type": "'individual' (name contains a comma) or 'organisation'.",
+        "loyalty_segment_name": "Loyalty label: Bronze, Silver, Gold, Platinum.",
+        "is_active": "TRUE while the CRM record is still open (no valid_to).",
+        "crm_valid_from": "Validity start of the record in the CRM.",
+        "crm_valid_to": "Validity end in the CRM; NULL while active."
+      }
+    },
+    {
+      "schema": "silver",
+      "name": "sales_orders",
+      "comment": "Web-shop order headers with change history (SCD2). Line items are in sales_order_lines.",
+      "tags": {
+        "layer": "silver",
+        "classification": "internal",
+        "scd_type": "2"
+      },
+      "pii_columns": [
+        "customer_name"
+      ],
+      "column_comments": {
+        "order_number": "Order business key.",
+        "source_document_id": "Cosmos document id; orders versions of the same order.",
+        "line_item_count": "Actual number of line items (number_of_line_items is the source's own, sometimes stale, count).",
+        "order_gross_amount": "Sum of price x quantity across the lines, before discounts.",
+        "click_count": "Total product clicks before checkout.",
+        "clicked_item_count": "Distinct products clicked before checkout."
+      }
+    },
+    {
+      "schema": "silver",
+      "name": "sales_order_lines",
+      "comment": "Web-shop order lines, one row per order x line, from the latest version of each order (SCD1).",
+      "tags": {
+        "layer": "silver",
+        "classification": "internal",
+        "scd_type": "1"
+      },
+      "column_comments": {
+        "line_number": "1-based position of the line within the order.",
+        "promo_id": "Promotion applied to the line; 'NONE' when there was none.",
+        "promo_discount_rate": "Discount rate applied to the line (0 when none).",
+        "gross_amount": "quantity x unit_price.",
+        "discount_amount": "gross_amount x promo_discount_rate.",
+        "net_amount": "gross_amount - discount_amount. Use this for revenue."
+      }
+    },
+    {
+      "schema": "silver",
+      "name": "sales_order_clicks",
+      "comment": "Products clicked before checkout, one row per order x product (SCD1).",
+      "tags": {
+        "layer": "silver",
+        "classification": "internal",
+        "scd_type": "1"
+      },
+      "column_comments": {
+        "click_count": "Number of clicks on the product before checkout.",
+        "product_id": "Clicked product; may not have been ordered."
+      }
+    },
+    {
+      "schema": "silver",
+      "name": "sales",
+      "comment": "Conformed point-of-sale transactions (SCD1). sale_id is a deterministic hash: the source has no key.",
+      "tags": {
+        "layer": "silver",
+        "classification": "internal",
+        "scd_type": "1"
+      },
+      "pii_columns": [
+        "customer_name"
+      ],
+      "column_comments": {
+        "sale_id": "Deterministic SHA-256 over the business columns; stable across reloads.",
+        "listed_product_name": "Product name from the export; disagrees with the payload for ~70% of rows.",
+        "product_name": "Product actually sold, parsed from the payload (authoritative).",
+        "brand": "Brand as reported by the export."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "dim_date",
+      "comment": "Calendar dimension, one row per day 2015-2030. Join facts on *_date_key.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "date_key"
+      ],
+      "column_comments": {
+        "date_key": "Surrogate key in yyyymmdd form, e.g. 20260907.",
+        "year_month": "yyyy-MM label for time-series charts.",
+        "is_weekend": "TRUE on Saturday and Sunday."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "dim_customer",
+      "comment": "Customer dimension (SCD2). One row per customer version; customer_sk = -1 is the Unknown member.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "customer_sk"
+      ],
+      "pii_columns": [
+        "customer_name",
+        "first_name",
+        "last_name",
+        "street",
+        "number",
+        "unit",
+        "ship_to_address",
+        "lon",
+        "lat",
+        "tax_id"
+      ],
+      "column_comments": {
+        "customer_sk": "Surrogate key, unique per customer version. Facts reference this. -1 = Unknown.",
+        "customer_id": "Business key from the CRM.",
+        "is_current": "TRUE for the latest version. Use customers_current for 'as of today'."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "dim_product",
+      "comment": "Product dimension derived from both channels; there is no product master upstream.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "product_sk"
+      ],
+      "column_comments": {
+        "product_sk": "Surrogate key. Facts reference this. -1 = Unknown.",
+        "brand": "Best-effort brand; see brand_source for how confident to be.",
+        "brand_source": "pos_export, name_match, name_prefix or unknown."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "dim_promotion",
+      "comment": "Promotion dimension derived from the promotions applied to order lines. 'NONE' = no promotion.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "promo_id"
+      ],
+      "column_comments": {
+        "promo_id": "Promotion code; 'NONE' when no promotion was applied.",
+        "promotion_name": "Label including the discount percentage.",
+        "discount_rate": "Discount rate the promotion applies."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "fact_sales_order_line",
+      "comment": "Web-shop order lines. GRAIN: one row per order x line, current version of the order.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "order_line_id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "customer_sk"
+          ],
+          "references": "dim_customer",
+          "referenced_columns": [
+            "customer_sk"
+          ]
+        },
+        {
+          "columns": [
+            "product_sk"
+          ],
+          "references": "dim_product",
+          "referenced_columns": [
+            "product_sk"
+          ]
+        },
+        {
+          "columns": [
+            "promo_id"
+          ],
+          "references": "dim_promotion",
+          "referenced_columns": [
+            "promo_id"
+          ]
+        },
+        {
+          "columns": [
+            "order_date_key"
+          ],
+          "references": "dim_date",
+          "referenced_columns": [
+            "date_key"
+          ]
+        }
+      ],
+      "column_comments": {
+        "order_line_id": "order_number-line_number.",
+        "net_amount": "Revenue for the line after the promotion discount.",
+        "order_date_key": "FK to dim_date; NULL when the source order had no timestamp."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "fact_sales_order",
+      "comment": "Web-shop order headers. GRAIN: one row per order (current version).",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "order_number"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "customer_sk"
+          ],
+          "references": "dim_customer",
+          "referenced_columns": [
+            "customer_sk"
+          ]
+        },
+        {
+          "columns": [
+            "order_date_key"
+          ],
+          "references": "dim_date",
+          "referenced_columns": [
+            "date_key"
+          ]
+        }
+      ],
+      "column_comments": {
+        "net_amount": "Sum of the line net amounts. Use this for order-level revenue.",
+        "click_count": "Total clicks recorded before checkout."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "fact_pos_sale",
+      "comment": "Store sales. GRAIN: one row per product sold. Not row-linkable to web orders.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "primary_key": [
+        "sale_id"
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "customer_sk"
+          ],
+          "references": "dim_customer",
+          "referenced_columns": [
+            "customer_sk"
+          ]
+        },
+        {
+          "columns": [
+            "product_sk"
+          ],
+          "references": "dim_product",
+          "referenced_columns": [
+            "product_sk"
+          ]
+        },
+        {
+          "columns": [
+            "sale_date_key"
+          ],
+          "references": "dim_date",
+          "referenced_columns": [
+            "date_key"
+          ]
+        }
+      ],
+      "column_comments": {
+        "total_amount": "Sale amount (quantity x unit_price). Use this for store revenue."
+      }
+    },
+    {
+      "schema": "gold",
+      "name": "customers_current",
+      "is_view": true,
+      "comment": "Current version of every real customer (excludes the Unknown member).",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "pii_columns": [
+        "customer_name",
+        "first_name",
+        "last_name",
+        "street",
+        "number",
+        "unit",
+        "ship_to_address",
+        "lon",
+        "lat",
+        "tax_id"
+      ]
+    },
+    {
+      "schema": "gold",
+      "name": "sales_order_lines_obt",
+      "is_view": true,
+      "comment": "One big table: web-shop order lines joined to customer, product, promotion and date. Start here for ad-hoc analysis.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "pii_columns": [
+        "customer_name"
+      ]
+    },
+    {
+      "schema": "gold",
+      "name": "pos_sales_obt",
+      "is_view": true,
+      "comment": "One big table: store sales joined to customer, product and date.",
+      "tags": {
+        "layer": "gold",
+        "classification": "internal"
+      },
+      "pii_columns": [
+        "customer_name"
+      ]
+    }
+  ]
+}

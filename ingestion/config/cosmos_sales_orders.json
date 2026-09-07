@@ -1,0 +1,15 @@
+{
+  "source_name": "cosmos_sales_orders",
+  "description": "Web-shop orders from Cosmos DB (Mongo API). Nested line items, promotions and click-stream.",
+  "source_type": "cosmos_mongodb",
+  "connection": {
+    "database": "retail",
+    "collection": "sales_orders",
+    "batch_size": 1000
+  },
+  "secret_keys": {
+    "connection_string": "cosmos-connection-string"
+  },
+  "landing_format": "json",
+  "bronze_table": "sales_orders"
+}

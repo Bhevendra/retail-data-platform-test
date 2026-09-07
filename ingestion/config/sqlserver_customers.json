@@ -1,0 +1,24 @@
+{
+  "source_name": "sqlserver_customers",
+  "description": "Customer master from the CRM (Azure SQL). Full extract every run.",
+  "source_type": "sqlserver",
+  "connection": {
+    "host": "rivadata.database.windows.net",
+    "port": 1433,
+    "database": "batch2",
+    "table": "retail.customers",
+    "jdbc_options": {
+      "trustServerCertificate": "true",
+      "loginTimeout": "90"
+    },
+    "read_options": {
+      "fetchsize": "10000"
+    }
+  },
+  "secret_keys": {
+    "username": "sqlserver-username",
+    "password": "sqlserver-password"
+  },
+  "landing_format": "csv",
+  "bronze_table": "customers"
+}

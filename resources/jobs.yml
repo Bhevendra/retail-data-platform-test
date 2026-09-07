@@ -3,8 +3,9 @@ resources:
     retail_data_platform:
       name: retail-data-platform-${bundle.target}
       description: >-
-        Daily medallion load: land Cosmos DB, S3 and SQL Server extracts in the raw volume,
-        build Bronze (audit + quality), Silver (SCD1/SCD2) and the Gold star schema + semantic layer.
+        Daily medallion load. Three ingestion tasks land raw extracts in the volume, Bronze
+        adds audit columns, three Silver notebooks clean and merge, Gold rebuilds the star
+        schema, then quality reports and governance stamps metadata.
       max_concurrent_runs: 1
       timeout_seconds: 7200
       queue:
@@ -13,10 +14,9 @@ resources:
         application: retail-data-platform
         environment: ${bundle.target}
         owner: data-engineering
-        cost_center: analytics
 
       schedule:
-        quartz_cron_expression: "0 0 5 * * ?"   # 05:00 UTC daily, after upstream exports
+        quartz_cron_expression: "0 0 5 * * ?"   # 05:00 UTC, after the overnight source exports
         timezone_id: UTC
         pause_status: ${var.schedule_pause_status}
 
@@ -30,20 +30,27 @@ resources:
             op: GREATER_THAN
             value: 3600
 
-      # Job-level parameters flow into every notebook widget with the same name,
-      # so a backfill is just `databricks bundle run retail_data_platform --params run_date=2026-09-01`.
+      # Job parameters fill the notebook widget of the same name, so a backfill is:
+      #   databricks bundle run retail_data_platform -t dev --params run_date=2026-09-01
       parameters:
         - name: run_date
           default: "{{job.start_time.iso_date}}"
-        - name: environment
-          default: ${bundle.target}
         - name: catalog
           default: ${var.catalog}
+        - name: bronze_schema
+          default: bronze
+        - name: silver_schema
+          default: silver
+        - name: gold_schema
+          default: gold
+        - name: ops_schema
+          default: ops
+        - name: raw_volume
+          default: raw_data
         - name: secret_scope
           default: ${var.secret_scope}
 
-      # Serverless compute: Python dependencies are declared once here (no cluster JARs needed;
-      # the SQL Server JDBC driver ships with the runtime).
+      # Serverless: Python dependencies are declared once, no cluster libraries.
       environments:
         - environment_key: platform
           spec:
@@ -54,69 +61,99 @@ resources:
               - databricks-sdk>=0.40.0
 
       tasks:
-        - task_key: land_cosmos
+        # --- Ingestion: one task per source, all three in parallel -------------------
+        - task_key: ingest_sqlserver
           environment_key: platform
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/land_source.ipynb
+            notebook_path: ../ingestion/code/sqlserver_ingestion.ipynb
             base_parameters:
-              config_path: src/config/bronze.json
-              source_name: cosmos_sales_orders
+              config_path: ingestion/config/sqlserver_customers.json
 
-        - task_key: land_s3
+        - task_key: ingest_cosmos
           environment_key: platform
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/land_source.ipynb
+            notebook_path: ../ingestion/code/cosmos_ingestion.ipynb
             base_parameters:
-              config_path: src/config/bronze.json
-              source_name: s3_sales
+              config_path: ingestion/config/cosmos_sales_orders.json
 
-        - task_key: land_sqlserver
+        - task_key: ingest_s3
           environment_key: platform
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../src/ingestion/land_source.ipynb
+            notebook_path: ../ingestion/code/s3_ingestion.ipynb
             base_parameters:
-              config_path: src/config/bronze.json
-              source_name: sqlserver_customers
+              config_path: ingestion/config/s3_sales.json
 
-        - task_key: ds2b
+        # --- Bronze: waits for all three; a partial day must never load silently -----
+        - task_key: bronze
           depends_on:
-            - task_key: land_cosmos
-            - task_key: land_s3
-            - task_key: land_sqlserver
+            - task_key: ingest_sqlserver
+            - task_key: ingest_cosmos
+            - task_key: ingest_s3
           run_if: ALL_SUCCESS
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../src/bronze/ds2b.ipynb
-            base_parameters:
-              config_path: src/config/bronze.json
+            notebook_path: ../bronze/code/raw_to_bronze.ipynb
 
-        - task_key: b2s
-          depends_on:
-            - task_key: ds2b
+        # --- Silver: one task per source, in parallel --------------------------------
+        - task_key: silver_customers
+          depends_on: [ { task_key: bronze } ]
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../src/silver/b2s.ipynb
+            notebook_path: ../silver/code/customers_silver.ipynb
             base_parameters:
-              config_path: src/config/silver.json
               detect_deletes: "false"
 
-        - task_key: s2g
-          depends_on:
-            - task_key: b2s
+        - task_key: silver_sales_orders
+          depends_on: [ { task_key: bronze } ]
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../src/gold/s2g.ipynb
+            notebook_path: ../silver/code/sales_orders_silver.ipynb
+
+        - task_key: silver_sales
+          depends_on: [ { task_key: bronze } ]
+          environment_key: platform
+          max_retries: 1
+          notebook_task:
+            notebook_path: ../silver/code/sales_silver.ipynb
+
+        # --- Gold: needs every Silver table ------------------------------------------
+        - task_key: gold
+          depends_on:
+            - task_key: silver_customers
+            - task_key: silver_sales_orders
+            - task_key: silver_sales
+          run_if: ALL_SUCCESS
+          environment_key: platform
+          max_retries: 1
+          notebook_task:
+            notebook_path: ../gold/code/build_gold.ipynb
+
+        # --- Quality: detect and report. Runs last and never blocks anything ---------
+        - task_key: quality
+          depends_on: [ { task_key: gold } ]
+          environment_key: platform
+          notebook_task:
+            notebook_path: ../quality/code/run_quality_checks.ipynb
             base_parameters:
-              config_path: src/config/gold.json
+              config_path: quality/config/rules.json
+
+        # --- Governance: metadata, independent of the quality outcome ----------------
+        - task_key: governance
+          depends_on: [ { task_key: gold } ]
+          environment_key: platform
+          notebook_task:
+            notebook_path: ../governance/code/apply_governance.ipynb
+            base_parameters:
+              config_path: governance/config/tables.json
 
       permissions:
         - level: CAN_VIEW

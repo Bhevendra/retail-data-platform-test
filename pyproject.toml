@@ -1,13 +1,14 @@
 [project]
 name = "retail-data-platform"
-version = "1.0.0"
-description = "Config-driven Databricks lakehouse: Cosmos DB, S3 and SQL Server to a governed Gold star schema"
+version = "2.0.0"
+description = "Databricks lakehouse: Cosmos DB, S3 and SQL Server to a governed Gold star schema"
 requires-python = ">=3.10"
 
 [tool.ruff]
 line-length = 160
 target-version = "py310"
-extend-exclude = ["src/**"]  # notebooks (.ipynb) use Databricks magics and implicit spark/dbutils globals
+# Notebook sources use Databricks magics and the implicit spark/dbutils globals.
+extend-exclude = ["ingestion/code", "bronze/code", "silver/code", "gold/code", "quality/code", "governance/code", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "W"]
@@ -15,6 +16,6 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires a Databricks workspace (Delta + Unity Catalog)"]
+markers = ["integration: needs a Databricks workspace (Delta + Unity Catalog)"]
 addopts = "-q -m 'not integration'"
 filterwarnings = ["ignore::DeprecationWarning"]

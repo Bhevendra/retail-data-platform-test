@@ -6,8 +6,13 @@ include:
 
 sync:
   include:
-    - src/**
     - common_utils/**
+    - ingestion/**
+    - bronze/**
+    - silver/**
+    - gold/**
+    - quality/**
+    - governance/**
 
 variables:
   catalog:

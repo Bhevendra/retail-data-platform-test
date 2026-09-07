@@ -1,0 +1,15 @@
+{
+  "source_name": "s3_sales",
+  "description": "Point-of-sale transactions exported nightly to S3 as Parquet. Copied byte-for-byte.",
+  "source_type": "s3",
+  "connection": {
+    "uri": "s3://bucket-rivadata/retail/sales.parquet",
+    "region": "eu-north-1"
+  },
+  "secret_keys": {
+    "access_key_id": "aws-access-key-id",
+    "secret_access_key": "aws-secret-access-key"
+  },
+  "landing_format": "parquet",
+  "bronze_table": "sales"
+}

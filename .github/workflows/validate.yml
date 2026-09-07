@@ -28,7 +28,7 @@ jobs:
         run: pytest
       - name: Data dictionary is up to date
         run: |
-          python -m common_utils.gold
+          python tools/data_dictionary.py
           git diff --exit-code docs/data-dictionary.md
 
   bundle-validate:
