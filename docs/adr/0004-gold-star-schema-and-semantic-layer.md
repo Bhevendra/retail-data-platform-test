@@ -12,7 +12,7 @@ declared grain, a generated date dimension, informational PK/FK constraints, com
 and tags. Views provide current-state and one-big-table access; metric views define
 governed measures.
 
-Each Gold object is one numbered `.sql` file in `gold/sql/`, holding a complete
+Each Gold object is one numbered `.sql` file in `src/gold/sql/`, holding a complete
 `CREATE OR REPLACE TABLE|VIEW ... AS` statement with `${catalog}` / `${silver}` /
 `${gold}` placeholders. The runner executes them in filename order, so the number *is*
 the dependency order — dimensions before facts, facts before the views that read them.

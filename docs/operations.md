@@ -10,7 +10,7 @@
    | SQL Server | `sqlserver-username`, `sqlserver-password` |
    | S3 | `aws-access-key-id`, `aws-secret-access-key` |
 
-   Never commit values; the key names live in `ingestion/config/*.json` and a test
+   Never commit values; the key names live in `src/ingestion/config/*.json` and a test
    fails on credential-looking literals.
 2. **Unity Catalog grants** for the deploying identity: `USE CATALOG`, `CREATE SCHEMA`,
    `CREATE VOLUME`, `CREATE TABLE`, `MODIFY` on the target catalog. In production the
@@ -18,7 +18,7 @@
    bundle; this job only creates them `IF NOT EXISTS` for convenience.
 3. **Azure SQL networking**: allow Databricks Serverless egress IPs on the server
    firewall. Serverless connects only with `trustServerCertificate=true` and a long
-   `loginTimeout` (set in `ingestion/config/sqlserver_customers.json`); encryption
+   `loginTimeout` (set in `src/ingestion/config/sqlserver_customers.json`); encryption
    stays on.
 4. **Production only**: a service principal (`run_as`), the `alert_email` distribution
    list, and `SELECT` grants on `gold` for BI/AI groups via `grants` in

@@ -8,7 +8,7 @@ requires-python = ">=3.10"
 line-length = 160
 target-version = "py310"
 # Notebook sources use Databricks magics and the implicit spark/dbutils globals.
-extend-exclude = ["ingestion/code", "bronze/code", "silver/code", "gold/code", "quality/code", "governance/code", "tools"]
+extend-exclude = ["src/*/code", "quality/code", "governance/code", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "W"]

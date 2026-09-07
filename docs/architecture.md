@@ -2,9 +2,11 @@
 
 ## Principles
 
-1. **Code lives next to the layer it belongs to.** `ingestion/`, `bronze/`, `silver/`,
-   `gold/`, `quality/`, `governance/` each hold their own `code/` and, where it earns
-   its place, `config/`. You can open any one of them and understand it alone.
+1. **Code lives next to the layer it belongs to.** `src/ingestion/`, `src/bronze/`,
+   `src/silver/` and `src/gold/` each hold their own `code/` and, where it earns its
+   place, `config/`; `quality/` and `governance/` sit outside `src/` because they are
+   cross-cutting concerns rather than steps in the load. You can open any one of them
+   and understand it alone.
 2. **Configuration where things repeat, code where they differ.** Ingestion is one
    config per source because the shape is identical. Silver is one notebook per entity
    because the cleaning rules genuinely differ. Gold is SQL because Gold is SQL.
@@ -64,7 +66,7 @@ The Cosmos order document carries three arrays. The rule is about grain:
   `promotion_info` becomes `promo_id`, `promo_discount_rate` and `promo_quantity` on
   the line; the order-level `promo_info` becomes `has_promotion`.
 
-One notebook (`silver/code/sales_orders_silver.ipynb`) produces all three tables from
+One notebook (`src/silver/code/sales_orders_silver.ipynb`) produces all three tables from
 one read, and **de-duplicates the header before exploding**: Cosmos re-sends an order
 as a new document when it changes, and an older document can carry lines the new one no
 longer has. De-duplicating only the header would leave those orphan lines behind and

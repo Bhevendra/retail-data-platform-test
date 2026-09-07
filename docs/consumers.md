@@ -108,5 +108,5 @@ WHERE EXISTS (SELECT 1 FROM retaildataplatform.gold.fact_pos_sale s WHERE s.cust
 | Refresh | Daily, 05:00 UTC (Gold ready typically by 05:30 UTC) |
 | Grain and keys | Declared per table in `docs/data-dictionary.md` |
 | Quality | Detect-and-report: every rule and reconciliation result lands in `ops.data_quality_results` after each run. A failed rule does not hold Gold back, so check the results table alongside freshness. |
-| Breaking changes | Announced via PR to `gold/sql/*.sql` and `governance/config/tables.json`; additive columns are not breaking |
+| Breaking changes | Announced via PR to `src/gold/sql/*.sql` and `governance/config/tables.json`; additive columns are not breaking |
 | Support | `ops.pipeline_runs` for status; data-engineering on-call for incidents |

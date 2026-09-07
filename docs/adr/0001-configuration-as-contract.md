@@ -13,11 +13,11 @@ moved the business logic into strings that no tool could read (see ADR 0006).
 Configuration is used where the work genuinely repeats, and code where it genuinely
 differs.
 
-* **Config**: sources (`ingestion/config/*.json`), quality rules
+* **Config**: sources (`src/ingestion/config/*.json`), quality rules
   (`quality/config/rules.json`), governance metadata
   (`governance/config/tables.json`). These are lists of near-identical things.
 * **Code**: the Silver transformations (one notebook per entity, explicit PySpark) and
-  the Gold model (`gold/sql/*.sql`). These differ per entity and are the business logic.
+  the Gold model (`src/gold/sql/*.sql`). These differ per entity and are the business logic.
 
 ## Consequences
 * Adding a source is a JSON file plus a job task; contract tests catch a config with no

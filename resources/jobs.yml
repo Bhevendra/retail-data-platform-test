@@ -67,27 +67,27 @@ resources:
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../ingestion/code/sqlserver_ingestion.ipynb
+            notebook_path: ../src/ingestion/code/sqlserver_ingestion.ipynb
             base_parameters:
-              config_path: ingestion/config/sqlserver_customers.json
+              config_path: src/ingestion/config/sqlserver_customers.json
 
         - task_key: ingest_cosmos
           environment_key: platform
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../ingestion/code/cosmos_ingestion.ipynb
+            notebook_path: ../src/ingestion/code/cosmos_ingestion.ipynb
             base_parameters:
-              config_path: ingestion/config/cosmos_sales_orders.json
+              config_path: src/ingestion/config/cosmos_sales_orders.json
 
         - task_key: ingest_s3
           environment_key: platform
           max_retries: 2
           min_retry_interval_millis: 300000
           notebook_task:
-            notebook_path: ../ingestion/code/s3_ingestion.ipynb
+            notebook_path: ../src/ingestion/code/s3_ingestion.ipynb
             base_parameters:
-              config_path: ingestion/config/s3_sales.json
+              config_path: src/ingestion/config/s3_sales.json
 
         # --- Bronze: waits for all three; a partial day must never load silently -----
         - task_key: bronze
@@ -99,7 +99,7 @@ resources:
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../bronze/code/raw_to_bronze.ipynb
+            notebook_path: ../src/bronze/code/raw_to_bronze.ipynb
 
         # --- Silver: one task per source, in parallel --------------------------------
         - task_key: silver_customers
@@ -107,7 +107,7 @@ resources:
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../silver/code/customers_silver.ipynb
+            notebook_path: ../src/silver/code/customers_silver.ipynb
             base_parameters:
               detect_deletes: "false"
 
@@ -116,14 +116,14 @@ resources:
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../silver/code/sales_orders_silver.ipynb
+            notebook_path: ../src/silver/code/sales_orders_silver.ipynb
 
         - task_key: silver_sales
           depends_on: [ { task_key: bronze } ]
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../silver/code/sales_silver.ipynb
+            notebook_path: ../src/silver/code/sales_silver.ipynb
 
         # --- Gold: needs every Silver table ------------------------------------------
         - task_key: gold
@@ -135,7 +135,7 @@ resources:
           environment_key: platform
           max_retries: 1
           notebook_task:
-            notebook_path: ../gold/code/build_gold.ipynb
+            notebook_path: ../src/gold/code/build_gold.ipynb
 
         # --- Quality: detect and report. Runs last and never blocks anything ---------
         - task_key: quality

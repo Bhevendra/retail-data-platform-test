@@ -18,7 +18,7 @@ SQL_STATEMENT = re.compile(r"^\s*CREATE\s+OR\s+REPLACE\s+(TABLE|VIEW)\s+(\S+)\s+
 
 
 def sql_files(root):
-    return sorted((root / "gold" / "sql").glob("*.sql"))
+    return sorted((root / "src" / "gold" / "sql").glob("*.sql"))
 
 
 def render(sql: str) -> str:

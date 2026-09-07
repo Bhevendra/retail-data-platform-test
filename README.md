@@ -6,20 +6,20 @@ entirely on **Serverless** compute and deploys with **Databricks Asset Bundles**
 
 ```
  Azure SQL         Cosmos DB          S3 (Parquet)
-     │                 │                   │      ingestion/code/*.ipynb  (3 tasks, parallel)
+     │                 │                   │      src/ingestion/code/*.ipynb  (3 tasks, parallel)
      ▼                 ▼                   ▼
  raw_data volume  /<source>/load_date=YYYY-MM-DD   ── the landed bytes, replayable
-     │                                              bronze/code/raw_to_bronze.ipynb
+     │                                              src/bronze/code/raw_to_bronze.ipynb
      ▼
  bronze.customers   bronze.sales_orders   bronze.sales     ── as received + 3 audit columns
-     │                                              silver/code/*.ipynb  (3 tasks, parallel)
+     │                                              src/silver/code/*.ipynb  (3 tasks, parallel)
      ▼
  silver.customers          (SCD2)
  silver.sales_orders       (SCD2)  ┐
  silver.sales_order_lines  (SCD1)  ├─ one notebook flattens the order document into 3 tables
  silver.sales_order_clicks (SCD1)  ┘
  silver.sales              (SCD1)
-     │                                              gold/code/build_gold.ipynb  (runs gold/sql/*.sql)
+     │                                              src/gold/code/build_gold.ipynb  (runs src/gold/sql/*.sql)
      ▼
  gold.dim_date  dim_customer  dim_product  dim_promotion       ── conformed dimensions, Unknown members
  gold.fact_sales_order_line  fact_sales_order  fact_pos_sale   ── declared grain, PK/FK, reconciled
@@ -30,14 +30,16 @@ entirely on **Serverless** compute and deploys with **Databricks Asset Bundles**
 
 ## How the repository is laid out
 
-Every layer owns its code and its configuration, and nothing else:
+The pipeline lives under `src/`, one folder per layer; everything that is *about* the
+pipeline stays at the root:
 
 ```
 common_utils/     generic library — reusable in any project, in any domain
-ingestion/  code/*.ipynb   config/*.json      one notebook + one config per source
-bronze/     code/raw_to_bronze.ipynb          one loop: Bronze is identical for every source
-silver/     code/*.ipynb                      one notebook per entity, explicit PySpark
-gold/       code/build_gold.ipynb  sql/*.sql  numbered SQL files, run in filename order
+src/                                          the pipeline: one folder per layer
+  ingestion/  code/*.ipynb  config/*.json      one notebook + one config per source
+  bronze/     code/raw_to_bronze.ipynb         one loop: Bronze is identical for every source
+  silver/     code/*.ipynb                     one notebook per entity, explicit PySpark
+  gold/       code/build_gold.ipynb  sql/*.sql numbered SQL files, run in filename order
 quality/    code/*.ipynb   config/rules.json  detect and report, never blocks
 governance/ code/*.ipynb   config/tables.json comments, tags, PII, PK/FK, grants
 resources/  jobs.yml                          the DAG
@@ -81,7 +83,7 @@ databricks bundle run retail_data_platform -t dev --params run_date=2026-09-01  
 ```
 
 Secrets are read from the scope named by the `secret_scope` job parameter; each
-`ingestion/config/*.json` lists the key names, never the values. One-time workspace
+`src/ingestion/config/*.json` lists the key names, never the values. One-time workspace
 setup is in `docs/operations.md`.
 
 Notebooks are `.ipynb`. `tools/nb.py` converts a `# Databricks notebook source` .py
@@ -89,12 +91,12 @@ file into one if you prefer to edit as text.
 
 ## Extending it
 
-* **New source** — add `ingestion/config/<name>.json`, a notebook in `ingestion/code/`
+* **New source** — add `src/ingestion/config/<name>.json`, a notebook in `src/ingestion/code/`
   if the protocol is new, and a task in `resources/jobs.yml`. Bronze picks it up from
   the config folder automatically.
-* **New Silver entity** — add a notebook in `silver/code/` and a task. Read it like a
+* **New Silver entity** — add a notebook in `src/silver/code/` and a task. Read it like a
   script: read Bronze, clean, hash, de-duplicate, merge.
-* **New Gold product** — add a numbered `.sql` file in `gold/sql/`, then describe it in
+* **New Gold product** — add a numbered `.sql` file in `src/gold/sql/`, then describe it in
   `governance/config/tables.json` and run `python tools/data_dictionary.py`.
 
 ## Where to look next

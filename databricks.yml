@@ -7,10 +7,7 @@ include:
 sync:
   include:
     - common_utils/**
-    - ingestion/**
-    - bronze/**
-    - silver/**
-    - gold/**
+    - src/**
     - quality/**
     - governance/**
 

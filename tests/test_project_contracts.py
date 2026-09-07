@@ -17,7 +17,7 @@ SILVER_TABLES = {"customers", "sales_orders", "sales_order_lines", "sales_order_
 
 @pytest.fixture(scope="module")
 def ingestion_configs(project_root):
-    return {p.stem: json.loads(p.read_text()) for p in sorted((project_root / "ingestion" / "config").glob("*.json"))}
+    return {p.stem: json.loads(p.read_text()) for p in sorted((project_root / "src" / "ingestion" / "config").glob("*.json"))}
 
 
 @pytest.fixture(scope="module")
@@ -50,7 +50,7 @@ def test_every_source_has_an_ingestion_task(job, ingestion_configs):
     configured = set()
     for task in job["tasks"]:
         path = task["notebook_task"]["base_parameters"].get("config_path", "") if task["notebook_task"].get("base_parameters") else ""
-        if path.startswith("ingestion/config/"):
+        if path.startswith("src/ingestion/config/"):
             configured.add(path.split("/")[-1].removesuffix(".json"))
     assert configured == set(ingestion_configs), "a source with no task never runs"
 
@@ -85,8 +85,8 @@ def test_run_date_is_a_job_parameter(job):
 # --------------------------------------------------------------------------- #
 def test_quality_rules_reference_tables_the_pipeline_builds(project_root):
     config = json.loads((project_root / "quality" / "config" / "rules.json").read_text())
-    bronze_tables = {json.loads(p.read_text())["bronze_table"] for p in (project_root / "ingestion" / "config").glob("*.json")}
-    gold_tables = {re.sub(r"^\d+_|\.optional|\.sql$", "", p.name) for p in (project_root / "gold" / "sql").glob("*.sql")}
+    bronze_tables = {json.loads(p.read_text())["bronze_table"] for p in (project_root / "src" / "ingestion" / "config").glob("*.json")}
+    gold_tables = {re.sub(r"^\d+_|\.optional|\.sql$", "", p.name) for p in (project_root / "src" / "gold" / "sql").glob("*.sql")}
     known = {"bronze": bronze_tables, "silver": SILVER_TABLES, "gold": gold_tables}
 
     for check in config["checks"]:
@@ -107,7 +107,7 @@ def test_reconciliations_only_use_placeholders(project_root):
 def test_governance_covers_every_gold_object(project_root):
     config = json.loads((project_root / "governance" / "config" / "tables.json").read_text())
     governed = {(t["schema"], t["name"]) for t in config["tables"]}
-    gold_objects = {("gold", re.sub(r"^\d+_|\.optional|\.sql$", "", p.name)) for p in (project_root / "gold" / "sql").glob("*.sql")}
+    gold_objects = {("gold", re.sub(r"^\d+_|\.optional|\.sql$", "", p.name)) for p in (project_root / "src" / "gold" / "sql").glob("*.sql")}
     ungoverned = gold_objects - governed - {("gold", "mv_web_sales"), ("gold", "mv_pos_sales")}
     assert not ungoverned, f"gold objects with no comments or keys: {ungoverned}"
 
@@ -136,7 +136,7 @@ def test_facts_declare_their_keys(project_root):
 # --------------------------------------------------------------------------- #
 def test_no_credentials_are_committed(project_root):
     pattern = re.compile(r"(AKIA[0-9A-Z]{16}|mongodb(\+srv)?://[^<\s]+:[^<\s]+@|password\s*=\s*['\"][^'\"{$]+['\"])", re.IGNORECASE)
-    folders = ["common_utils", "ingestion", "bronze", "silver", "gold", "quality", "governance", "resources"]
+    folders = ["common_utils", "src", "quality", "governance", "resources"]
     for folder in folders:
         for path in (project_root / folder).rglob("*"):
             if path.is_file() and path.suffix in {".py", ".json", ".yml", ".sql", ".ipynb"}:

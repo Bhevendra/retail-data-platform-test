@@ -17,8 +17,11 @@ interpreted those files. Three problems followed:
    customers?" you read a JSON entry, then the generic interpreter that consumed it.
 
 ## Decision
-* Each layer owns a folder with `code/` and, where it earns its place, `config/`:
-  `ingestion/`, `bronze/`, `silver/`, `gold/`, `quality/`, `governance/`.
+* Each layer owns a folder with `code/` and, where it earns its place, `config/`. The
+  four medallion layers live under `src/` (`src/ingestion/`, `src/bronze/`,
+  `src/silver/`, `src/gold/`), which keeps the pipeline separate from the repository
+  furniture — docs, classes, tests, tools. `quality/` and `governance/` stay at the
+  root because they are cross-cutting concerns, not steps in the load.
 * Silver is one notebook per entity, explicit PySpark, top to bottom.
 * Gold is numbered `.sql` files.
 * Quality and governance are separate notebooks and separate tasks, not steps folded

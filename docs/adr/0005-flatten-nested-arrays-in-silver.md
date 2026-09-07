@@ -12,7 +12,7 @@ array skills.
 ## Decision
 Silver gets one table per grain: `sales_orders` (header, SCD2), `sales_order_lines`
 (order x line, SCD1, from the latest order version) and `sales_order_clicks`
-(order x clicked product, SCD1). One notebook, `silver/code/sales_orders_silver.ipynb`,
+(order x clicked product, SCD1). One notebook, `src/silver/code/sales_orders_silver.ipynb`,
 builds all three from a single read: it parses the JSON, de-duplicates to one document
 per order, derives the header counts and totals, then explodes the arrays. Line-level promotions stay attributes of the line
 (`promo_item` always equals the line's product); Gold adds a small `dim_promotion`.
