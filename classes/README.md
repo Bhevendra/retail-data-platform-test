@@ -21,16 +21,17 @@ A prerequisite concept (SCD, MERGE, window functions, pytest, YAML …) is taugh
 Each class file contains: objectives, the mini-lessons to teach first, the live-coding
 script in versions (v1 → v2 → v3 …), checkpoints ("everyone should now see …"),
 exercises, homework, the real errors students will hit and how to read them, and a
-minute-by-minute plan for a 90–100 minute session.
+minute-by-minute plan for a **120 minute** session.
 
 ## The end state
 
 The repository students end with (identical to the reference repo):
 
 ```
-common_utils/   config, runtime, sources, bronze, quality, scd, silver, gold, governance, observability
-src/config/     bronze.json, silver.json, gold.json
-src/ingestion/land_source.ipynb   src/bronze/ds2b.ipynb   src/silver/b2s.ipynb   src/gold/s2g.ipynb
+common_utils/   logger, metadata, ingestors, writers, transforms, scd, quality, governance, observability, settings
+src/ingestion/  code/*.ipynb  config/*.json        src/bronze/code/raw_to_bronze.ipynb
+src/silver/     code/*.ipynb (one per entity)      src/gold/code/build_gold.ipynb  src/gold/sql/*.sql
+quality/  governance/   (code/ + config/, their own tasks)
 resources/jobs.yml   databricks.yml   tests/   docs/   .github/workflows/validate.yml
 ```
 
@@ -40,15 +41,13 @@ resources/jobs.yml   databricks.yml   tests/   docs/   .github/workflows/validat
 | --- | --- | --- |
 | **Phase 0 — Orientation** | | |
 | 0 | [The Data Product Blueprint: template + filled example](class00-blueprint.md) | Use the reusable [Data Product Blueprint template](templates/DATA-PRODUCT-BLUEPRINT.md) (23 sections, three gates); fill it with stakeholders; know the minimum needed to start (source details, access, classification) |
-| 1 | [The project, the platform, the plan](class01.md) | Explain medallion layers, navigate Databricks Free Edition, create catalog/schema/volume, run a parameterised notebook |
-| **Phase 1 — Ingestion (raw layer)** | | |
-| 2 | [SQL Server → volume (hard-coded)](class02.md) | Read a JDBC table, write CSV into a volume, explain "land raw first" |
-| 3 | [Amazon S3 → volume with boto3](class03.md) | pip-install a library, copy bytes with the Files API, understand parquet |
-| 4 | [Cosmos DB → volume with pymongo](class04.md) | Read documents, serialise nested JSON, create a DataFrame from Python rows |
-| 5 | [Secrets, functions and the first config.json](class05.md) | Replace credentials with a secret scope, turn scripts into functions, drive them from config |
-| **Phase 2 — Bronze** | | |
-| 6 | [Raw → Bronze: Delta tables and audit columns](class06.md) | Write Delta tables, add lineage columns, read landed files back |
-| 7 | [Idempotency: run_date, load_date and replaceWhere](class07.md) | Re-run a day safely, loop over sources from config, build the first `ds2b` notebook |
+| **Phase 1 — Ingestion and Bronze (as taught)** | | |
+| 1 | [Ingestion from multiple sources (hard-coded)](class01.md) | Create catalog/schema/volume; land SQL Server as CSV and Cosmos DB as JSON under `load_date=`; explain "land raw first" |
+| 2 | [S3 ingestion and raw → Bronze Delta tables](class02.md) | Read Parquet from S3; turn all three landed feeds into Bronze Delta tables with `last_update_ts` and `file_path` |
+| 3 | [From six copied notebooks to one function library](class03.md) | logging instead of print; `common_utils` package; ingestion functions; `bronze_ingestor()` + one Bronze notebook; config as JSON |
+| 4 | [Secrets and parameters](class05.md) *(to be re-cut)* | Replace credentials with a secret scope; `run_date` as a widget instead of a hard-coded date |
+| **Phase 2 — Bronze, properly** | | |
+| 5 | [Idempotency: run_date, load_date and replaceWhere](class07.md) *(to be re-cut)* | Re-run a day safely; why `overwrite` on a whole table is not idempotent per date |
 | **Phase 3 — Silver** | | |
 | 8 | [Data profiling workshop](class08.md) | Find duplicates, broken JSON, epoch timestamps, NULL literals; write a findings list |
 | 9 | [Transformations driven by config](class09.md) | rename/cast/parse_json/derived as a loop over a dictionary; tolerant casts |
@@ -93,5 +92,14 @@ to a volume in Class 1; every class works with either.
 
 ## Suggested pacing
 
-One class per session (90–100 min). Classes 8, 10, 13 and 22 are dense; if the group
-is slow, split each into two sessions at the marked "natural break".
+One class per session (**120 min**). The dense classes carry a marked "natural break" —
+stop there and start the next session from that point rather than rushing the second half.
+
+## Re-sequencing note (September 2026)
+
+Classes 1–3 have been rewritten to match what was actually delivered in the live sessions
+(two hard-coded ingestion/Bronze classes, then one modularisation class). Classes 4
+onwards in the table below still carry their original numbering and assume the earlier
+split of the same material; they are being re-cut in order. Where a row says
+*(to be re-cut)* the content is sound but the class number and the code it starts from
+need adjusting.
